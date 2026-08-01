@@ -7,7 +7,10 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<CurrentUser | null>(null)
   const initialized = ref(false)
   const authenticating = ref(false)
+  const registrationEnabled = ref(false)
+  const registrationInitialized = ref(false)
   const isAuthenticated = computed(() => Boolean(user.value))
+  const isAdmin = computed(() => String(user.value?.role || '').toUpperCase() === 'ADMIN')
 
   async function hydrate() {
     if (initialized.value) return
@@ -28,6 +31,17 @@ export const useAuthStore = defineStore('auth', () => {
       initialized.value = true
     } finally {
       authenticating.value = false
+    }
+  }
+
+  async function hydrateRegistration() {
+    if (registrationInitialized.value) return
+    try {
+      registrationEnabled.value = (await authApi.registration()).enabled
+    } catch {
+      registrationEnabled.value = false
+    } finally {
+      registrationInitialized.value = true
     }
   }
 
@@ -60,7 +74,11 @@ export const useAuthStore = defineStore('auth', () => {
     initialized,
     authenticating,
     isAuthenticated,
+    isAdmin,
+    registrationEnabled,
+    registrationInitialized,
     hydrate,
+    hydrateRegistration,
     login,
     register,
     logout,

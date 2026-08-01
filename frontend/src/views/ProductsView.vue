@@ -9,8 +9,11 @@ import StatusTag from '@/components/StatusTag.vue'
 import { memberApi, productApi, saleOrderApi } from '@/api'
 import { errorMessage } from '@/api/http'
 import { formatCurrency, formatDateTime } from '@/utils/format'
+import { useAuthStore } from '@/stores/auth'
 import type { Id, Member, Product, SaleOrder } from '@/types'
 
+const auth = useAuthStore()
+const canManageProducts = computed(() => auth.isAdmin)
 const deskTab = ref('cart')
 const loading = ref(true)
 const error = ref('')
@@ -267,7 +270,9 @@ onMounted(load)
       </div>
       <div class="counter-head__actions">
         <el-button :icon="Refresh" :loading="loading" @click="load">刷新货架</el-button>
-        <el-button type="primary" :icon="Plus" @click="openProduct()">新增商品</el-button>
+        <el-button v-if="canManageProducts" type="primary" :icon="Plus" @click="openProduct()">
+          新增商品
+        </el-button>
       </div>
     </header>
 
@@ -307,9 +312,9 @@ onMounted(load)
           <LakeEmptyState
             v-if="!visibleProducts.length"
             title="货架上没有匹配商品"
-            description="调整搜索词或商品分类，也可以直接新增商品。"
+            :description="canManageProducts ? '调整搜索词或商品分类，也可以直接新增商品。' : '调整搜索词或商品分类后重试。'"
           >
-            <el-button type="primary" @click="openProduct()">新增商品</el-button>
+            <el-button v-if="canManageProducts" type="primary" @click="openProduct()">新增商品</el-button>
           </LakeEmptyState>
           <div v-else class="shelf-grid">
             <article
@@ -328,6 +333,7 @@ onMounted(load)
                     已选 {{ selectedQuantity(product.id) }}
                   </span>
                   <el-button
+                    v-if="canManageProducts"
                     :icon="Edit"
                     text
                     :aria-label="`编辑商品 ${product.name}`"
@@ -494,6 +500,7 @@ onMounted(load)
     </aside>
 
     <el-dialog
+      v-if="canManageProducts"
       v-model="productDialogOpen"
       :title="productForm.id !== undefined ? '编辑商品' : '新增商品'"
       width="620px"

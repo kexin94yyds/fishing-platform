@@ -6,6 +6,7 @@ import com.fishing.platform.service.DatabaseUserDetailsService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
@@ -89,7 +90,21 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                         .sessionFixation(fixation -> fixation.changeSessionId()))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/auth/csrf", "/api/auth/login", "/api/auth/register", "/error").permitAll()
+                        .requestMatchers(
+                                "/api/auth/csrf",
+                                "/api/auth/login",
+                                "/api/auth/register",
+                                "/api/auth/registration",
+                                "/error").permitAll()
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/zones",
+                                "/api/spots",
+                                "/api/products").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT,
+                                "/api/zones/**",
+                                "/api/spots/**",
+                                "/api/products/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/payments/*/confirm").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .requestCache(cache -> cache.disable())
                 .formLogin(form -> form.disable())

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, reactive, ref } from 'vue'
+import { nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Lock, User } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -40,6 +40,8 @@ async function submit() {
     error.value = errorMessage(reason)
   }
 }
+
+onMounted(auth.hydrateRegistration)
 </script>
 
 <template>
@@ -123,7 +125,7 @@ async function submit() {
           </el-button>
         </el-form>
         <p class="login-help">如账号无法使用，请联系系统管理员处理</p>
-        <p class="login-register">
+        <p v-if="auth.registrationEnabled" class="login-register">
           还没有运营账号？
           <RouterLink to="/register">创建账号</RouterLink>
         </p>

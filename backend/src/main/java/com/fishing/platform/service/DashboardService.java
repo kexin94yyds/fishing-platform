@@ -1,25 +1,22 @@
 package com.fishing.platform.service;
 
 import com.fishing.platform.mapper.DashboardMapper;
-import com.fishing.platform.mapper.AnalyticsMapper;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.IntStream;
 
 @Service
 public class DashboardService {
     private final DashboardMapper mapper;
-    private final AnalyticsMapper analyticsMapper;
+    private final AnalyticsService analyticsService;
 
-    public DashboardService(DashboardMapper mapper, AnalyticsMapper analyticsMapper) {
+    public DashboardService(DashboardMapper mapper, AnalyticsService analyticsService) {
         this.mapper = mapper;
-        this.analyticsMapper = analyticsMapper;
+        this.analyticsService = analyticsService;
     }
 
     public Map<String, Object> summary() {
@@ -30,19 +27,16 @@ public class DashboardService {
         result.put("todayRevenue", mapper.todayRevenue());
         result.put("lowStockProducts", mapper.lowStockProducts());
         result.put("todayCatchCount", mapper.todayCatchCount());
-        result.put("visitorsToday", mapper.visitorsToday());
         result.put("pendingPayments", mapper.pendingPayments());
 
-        LocalDate start = LocalDate.now().minusDays(6);
-        Map<LocalDate, Integer> visitsByDate = new HashMap<>();
-        analyticsMapper.traffic(start).forEach(point -> visitsByDate.put(point.statDate(), point.visits()));
+        var trafficSeries = analyticsService.trafficSeries(7);
+        result.put("visitorsToday", trafficSeries.get(trafficSeries.size() - 1).visits());
         DateTimeFormatter labelFormat = DateTimeFormatter.ofPattern("MM-dd");
-        List<Map<String, Object>> trafficTrend = IntStream.range(0, 7)
-                .mapToObj(offset -> start.plusDays(offset))
-                .map(date -> {
+        List<Map<String, Object>> trafficTrend = trafficSeries.stream()
+                .map(trafficPoint -> {
                     Map<String, Object> point = new LinkedHashMap<>();
-                    point.put("label", date.format(labelFormat));
-                    point.put("value", visitsByDate.getOrDefault(date, 0));
+                    point.put("label", trafficPoint.statDate().format(labelFormat));
+                    point.put("value", trafficPoint.visits());
                     return point;
                 })
                 .toList();

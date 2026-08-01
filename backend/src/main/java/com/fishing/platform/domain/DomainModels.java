@@ -175,6 +175,12 @@ public final class DomainModels {
     ) {
     }
 
+    public record DailyCount(LocalDate statDate, Long metricValue) {
+    }
+
+    public record DailyAmount(LocalDate statDate, BigDecimal metricValue) {
+    }
+
     public record DashboardMetric(String name, Long metricValue) {
     }
 

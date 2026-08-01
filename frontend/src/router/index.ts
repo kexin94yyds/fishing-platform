@@ -83,9 +83,14 @@ router.beforeEach(async (to) => {
   await auth.hydrate()
 
   if (to.meta.public) {
-    return ['login', 'register'].includes(String(to.name)) && auth.isAuthenticated
-      ? { name: 'dashboard' }
-      : true
+    if (['login', 'register'].includes(String(to.name)) && auth.isAuthenticated) {
+      return { name: 'dashboard' }
+    }
+    if (to.name === 'register') {
+      await auth.hydrateRegistration()
+      if (!auth.registrationEnabled) return { name: 'login' }
+    }
+    return true
   }
 
   if (!auth.isAuthenticated) {

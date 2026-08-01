@@ -10,6 +10,7 @@ import type {
   PageResult,
   Payment,
   Product,
+  RegistrationStatus,
   SaleCreatePayload,
   SaleCreateResult,
   SaleOrder,
@@ -22,6 +23,8 @@ type Query = Record<string, string | number | boolean | undefined>
 
 export const authApi = {
   csrf: () => request<unknown>({ url: '/auth/csrf', method: 'GET' }),
+  registration: () =>
+    request<RegistrationStatus>({ url: '/auth/registration', method: 'GET' }),
   login: async (payload: { username: string; password: string }) => {
     const user = await request<unknown>({ url: '/auth/login', method: 'POST', data: payload }).then(
       toCurrentUser,

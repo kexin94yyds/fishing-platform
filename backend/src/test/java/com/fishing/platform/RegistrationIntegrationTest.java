@@ -49,6 +49,14 @@ class RegistrationIntegrationTest {
     private PasswordEncoder passwordEncoder;
 
     @Test
+    void demoProfileAdvertisesPublicRegistration() throws Exception {
+        mockMvc.perform(get("/api/auth/registration"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.enabled", is(true)));
+    }
+
+    @Test
     void registerRequiresCsrfEvenThoughEndpointIsPublic() throws Exception {
         String username = "csrf_guarded_user";
         mockMvc.perform(post("/api/auth/register")

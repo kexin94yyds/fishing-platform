@@ -43,6 +43,9 @@ public final class ApiDtos {
     public record CsrfView(String headerName, String parameterName, String token) {
     }
 
+    public record RegistrationView(boolean enabled) {
+    }
+
     public record MeView(Long id, String username, String displayName, String role) {
     }
 

@@ -10,8 +10,11 @@ import { spotApi, zoneApi } from '@/api'
 import { errorMessage } from '@/api/http'
 import { statusLabel } from '@/utils/format'
 import { focusFirstInvalid } from '@/utils/forms'
+import { useAuthStore } from '@/stores/auth'
 import type { Id, Spot, Zone } from '@/types'
 
+const auth = useAuthStore()
+const canManageConfiguration = computed(() => auth.isAdmin)
 const viewMode = ref('map')
 const loading = ref(true)
 const error = ref('')
@@ -285,8 +288,14 @@ onMounted(load)
           <el-radio-button value="list">钓位册</el-radio-button>
           <el-radio-button value="zones">分区册</el-radio-button>
         </el-radio-group>
-        <el-button :icon="Plus" @click="openZone()">新增分区</el-button>
-        <el-button type="primary" :icon="Plus" :disabled="!zones.length" @click="openSpot()">
+        <el-button v-if="canManageConfiguration" :icon="Plus" @click="openZone()">新增分区</el-button>
+        <el-button
+          v-if="canManageConfiguration"
+          type="primary"
+          :icon="Plus"
+          :disabled="!zones.length"
+          @click="openSpot()"
+        >
           新增钓位
         </el-button>
       </div>
@@ -393,7 +402,14 @@ onMounted(load)
                 <dd>{{ selectedSpot.note || '暂无备注' }}</dd>
               </div>
             </dl>
-            <el-button type="primary" :icon="Edit" @click="openSpot(selectedSpot)">编辑钓位</el-button>
+            <el-button
+              v-if="canManageConfiguration"
+              type="primary"
+              :icon="Edit"
+              @click="openSpot(selectedSpot)"
+            >
+              编辑钓位
+            </el-button>
           </template>
           <LakeEmptyState
             v-else
@@ -448,7 +464,7 @@ onMounted(load)
           <el-table-column label="状态" width="105">
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
           </el-table-column>
-          <el-table-column label="操作" width="90" fixed="right">
+          <el-table-column v-if="canManageConfiguration" label="操作" width="90" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openSpot(row)">编辑</el-button>
             </template>
@@ -462,7 +478,7 @@ onMounted(load)
           title="暂无分区"
           description="先创建湖区分区，再添加对应钓位"
         >
-          <el-button type="primary" @click="openZone()">新增分区</el-button>
+          <el-button v-if="canManageConfiguration" type="primary" @click="openZone()">新增分区</el-button>
         </LakeEmptyState>
         <el-table v-else :data="zones" class="ledger-table" stripe>
           <el-table-column prop="name" label="分区名称" min-width="130" />
@@ -476,7 +492,7 @@ onMounted(load)
           <el-table-column label="状态" width="100">
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
           </el-table-column>
-          <el-table-column label="操作" width="90">
+          <el-table-column v-if="canManageConfiguration" label="操作" width="90">
             <template #default="{ row }">
               <el-button link type="primary" @click="openZone(row)">编辑</el-button>
             </template>
@@ -486,6 +502,7 @@ onMounted(load)
     </ResourceState>
 
     <el-dialog
+      v-if="canManageConfiguration"
       v-model="zoneDialogOpen"
       :title="zoneForm.id !== undefined ? '编辑分区' : '新增分区'"
       width="560px"
@@ -530,6 +547,7 @@ onMounted(load)
     </el-dialog>
 
     <el-dialog
+      v-if="canManageConfiguration"
       v-model="spotDialogOpen"
       :title="spotForm.id !== undefined ? '编辑钓位' : '新增钓位'"
       width="660px"

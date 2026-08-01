@@ -19,6 +19,10 @@ export interface CurrentUser {
   role: string
 }
 
+export interface RegistrationStatus {
+  enabled: boolean
+}
+
 export interface Zone {
   id: Id
   name: string

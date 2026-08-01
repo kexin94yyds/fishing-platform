@@ -1,5 +1,5 @@
 {
-  "goal": "完成“湖畔运营所”差异化重设计、开放自助注册与全站高级体验升级",
+  "goal": "完成核心业务闭环、角色权限边界与统一统计口径",
   "items": [
     {
       "id": "backend",
@@ -23,7 +23,17 @@
     },
     {
       "id": "registration",
-      "title": "完成运营人员自助注册、自动登录、数据库约束与权限边界",
+      "title": "完成分环境注册开关、运营人员自动登录与数据库角色约束",
+      "status": "completed"
+    },
+    {
+      "id": "authorization",
+      "title": "完成 ADMIN / OPERATOR 后端授权矩阵与前端入口同步",
+      "status": "completed"
+    },
+    {
+      "id": "statistics-consistency",
+      "title": "统一看板与客流分析的实时业务事实和开放钓位口径",
       "status": "completed"
     },
     {
@@ -35,6 +45,17 @@
       "id": "experience-upgrade",
       "title": "完成全站资源状态、表单焦点、语义导航、快速前往与移动端体验收尾",
       "status": "completed"
+    },
+    {
+      "id": "mysql-runtime-validation",
+      "title": "在可用 MySQL 8 或 CI/Testcontainers 中执行迁移与接口回归",
+      "status": "pending",
+      "note": "本机 Homebrew MySQL 动态库损坏，当前仅完成 H2 MySQL 兼容模式验证"
+    },
+    {
+      "id": "frontend-automated-tests",
+      "title": "为注册开关与角色化操作入口补充前端自动化测试",
+      "status": "pending"
     }
   ]
 }

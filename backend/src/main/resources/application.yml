@@ -30,3 +30,7 @@ server:
 logging:
   level:
     com.fishing.platform.mapper: info
+
+fishing:
+  registration:
+    enabled: false

@@ -7,6 +7,7 @@ import LakeEmptyState from '@/components/LakeEmptyState.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { paymentApi, saleOrderApi } from '@/api'
 import { errorMessage } from '@/api/http'
+import { useAuthStore } from '@/stores/auth'
 import {
   businessTypeLabel,
   formatCurrency,
@@ -15,6 +16,8 @@ import {
 } from '@/utils/format'
 import type { Payment, SaleOrder } from '@/types'
 
+const auth = useAuthStore()
+const canConfirmPayments = computed(() => auth.isAdmin)
 const loading = ref(true)
 const error = ref('')
 const payments = ref<Payment[]>([])
@@ -67,13 +70,14 @@ async function load() {
 }
 
 function openConfirm(payment: Payment) {
+  if (!canConfirmPayments.value) return
   selectedPayment.value = payment
   paymentMethod.value = payment.method || 'CASH'
   confirmDialogOpen.value = true
 }
 
 async function confirmPayment() {
-  if (!selectedPayment.value) return
+  if (!canConfirmPayments.value || !selectedPayment.value) return
   const payment = selectedPayment.value
   confirmingId.value = payment.id
   try {
@@ -98,7 +102,7 @@ onMounted(load)
       <div>
         <span class="station-kicker">收费账房</span>
         <h1>先清待办，再对账目</h1>
-        <p>现场到账确认会同步更新关联销售订单。</p>
+        <p>{{ canConfirmPayments ? '现场到账确认会同步更新关联销售订单。' : '可查看收费记录，到账由管理员核实。' }}</p>
       </div>
       <el-button :icon="Refresh" :loading="loading" @click="load">刷新账目</el-button>
     </header>
@@ -144,6 +148,7 @@ onMounted(load)
               <div class="payment-ticket__foot">
                 <span>{{ payment.paymentNo || payment.id }}</span>
                 <el-button
+                  v-if="canConfirmPayments"
                   type="primary"
                   :icon="Check"
                   :loading="confirmingId === payment.id"
@@ -233,7 +238,7 @@ onMounted(load)
                 <div class="ledger-row__time" data-label="确认时间">
                   <span>{{ formatDateTime(payment.confirmedAt) }}</span>
                   <el-button
-                    v-if="payment.status === 'PENDING'"
+                    v-if="canConfirmPayments && payment.status === 'PENDING'"
                     link
                     type="primary"
                     :aria-label="`核实到账 ${payment.paymentNo || payment.id}`"
@@ -282,7 +287,13 @@ onMounted(load)
       </section>
     </ResourceState>
 
-    <el-dialog v-model="confirmDialogOpen" title="核实到账" width="520px" destroy-on-close>
+    <el-dialog
+      v-if="canConfirmPayments"
+      v-model="confirmDialogOpen"
+      title="核实到账"
+      width="520px"
+      destroy-on-close
+    >
       <div v-if="selectedPayment" class="confirm-payment">
         <div class="confirm-payment__summary">
           <span>待确认金额</span>

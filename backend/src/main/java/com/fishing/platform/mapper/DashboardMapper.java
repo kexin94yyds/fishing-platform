@@ -9,16 +9,27 @@ import java.util.List;
 
 public interface DashboardMapper {
 
-    @Select("SELECT COUNT(*) FROM fishing_spot WHERE status = 'OPEN'")
+    @Select("""
+            SELECT COUNT(*)
+            FROM fishing_spot s
+            JOIN fishing_zone z ON z.id = s.zone_id
+            WHERE s.status = 'OPEN' AND z.status = 'ACTIVE'
+            """)
     long openSpots();
 
-    @Select("SELECT COUNT(*) FROM booking WHERE fishing_date = CURRENT_DATE AND status = 'CONFIRMED'")
+    @Select("SELECT COUNT(*) FROM booking WHERE fishing_date = CURRENT_DATE AND status != 'CANCELLED'")
     long todayBookings();
 
     @Select("SELECT COUNT(*) FROM member WHERE status = 'ACTIVE'")
     long activeMembers();
 
-    @Select("SELECT COALESCE(SUM(amount), 0) FROM payment WHERE status = 'PAID' AND confirmed_at >= CURRENT_DATE")
+    @Select("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM payment
+            WHERE status = 'PAID'
+              AND confirmed_at >= CURRENT_DATE
+              AND confirmed_at < CURRENT_DATE + INTERVAL '1' DAY
+            """)
     BigDecimal todayRevenue();
 
     @Select("SELECT COUNT(*) FROM product WHERE status = 'ACTIVE' AND stock_quantity <= 10")
@@ -26,13 +37,6 @@ public interface DashboardMapper {
 
     @Select("SELECT COALESCE(SUM(quantity), 0) FROM catch_record WHERE fishing_date = CURRENT_DATE AND status != 'VOID'")
     long todayCatchCount();
-
-    @Select("""
-            SELECT COALESCE(SUM(visitor_count), 0)
-            FROM visitor_flow_record
-            WHERE recorded_at >= CURRENT_DATE
-            """)
-    long visitorsToday();
 
     @Select("SELECT COUNT(*) FROM payment WHERE status = 'PENDING'")
     long pendingPayments();

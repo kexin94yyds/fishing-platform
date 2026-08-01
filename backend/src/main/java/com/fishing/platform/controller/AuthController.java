@@ -6,6 +6,7 @@ import com.fishing.platform.dto.ApiDtos.CsrfView;
 import com.fishing.platform.dto.ApiDtos.LoginRequest;
 import com.fishing.platform.dto.ApiDtos.MeView;
 import com.fishing.platform.dto.ApiDtos.RegisterRequest;
+import com.fishing.platform.dto.ApiDtos.RegistrationView;
 import com.fishing.platform.service.CurrentUserService;
 import com.fishing.platform.service.RegistrationService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -81,6 +82,11 @@ public class AuthController {
         } catch (AuthenticationException exception) {
             throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "注册成功但自动登录失败，请重新登录");
         }
+    }
+
+    @GetMapping("/registration")
+    public ApiResponse<RegistrationView> registration() {
+        return ApiResponse.ok(new RegistrationView(registrationService.isEnabled()));
     }
 
     @GetMapping("/me")

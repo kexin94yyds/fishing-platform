@@ -66,7 +66,7 @@ class PlatformIntegrationTest {
 
         mockMvc.perform(get("/api/dashboard/summary").session(session))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.visitorsToday", is(142)))
+                .andExpect(jsonPath("$.data.visitorsToday", is(186)))
                 .andExpect(jsonPath("$.data.trafficTrend", hasSize(7)))
                 .andExpect(jsonPath("$.data.bookingMix[0].name", is("CONFIRMED")))
                 .andExpect(jsonPath("$.data.recentBookings[0].bookingNo", is("BK-SEED-002")));
