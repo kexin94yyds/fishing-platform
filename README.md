@@ -58,6 +58,88 @@ npm run dev
 
 前端开发服务器会把 `/api` 请求代理到后端的 18080 端口。若后端使用其他端口，可在启动前设置 `VITE_API_PROXY_TARGET`。
 
+## Windows 环境安装与启动
+
+Windows 10/11 可以直接运行本项目。毕设演示推荐使用默认 `demo` 配置：数据库位于后端进程内存中，无需安装 MySQL、Docker 或 WSL。
+
+### 1. 环境安装清单
+
+- JDK 17：从 [Eclipse Temurin](https://adoptium.net/temurin/releases/?version=17) 下载 Windows JDK 17 的 MSI 安装包。安装时启用 `Set JAVA_HOME` 和加入 `PATH`。
+- Maven 3.9+：从 [Apache Maven](https://maven.apache.org/download.cgi) 下载 Binary zip，解压到固定目录，例如 `C:\Tools\apache-maven`；配置 `MAVEN_HOME`，并把 `%MAVEN_HOME%\bin` 加入用户 `Path`。
+- Node.js：从 [Node.js 官网](https://nodejs.org/en/download) 安装当前 LTS 版本。项目要求 Node.js 20 或更高版本，安装包会同时安装 npm。
+- Git：只有通过 Git 获取项目时才需要；直接复制或解压项目文件时可以不安装。
+
+安装后关闭并重新打开 PowerShell，逐项检查：
+
+```powershell
+java -version
+mvn.cmd -version
+node --version
+npm.cmd --version
+```
+
+`java -version` 和 `mvn.cmd -version` 中的 Java 都必须是 17。若电脑安装了多个 JDK，以 `mvn.cmd -version` 显示的版本为准。
+
+建议把项目放在不含特殊权限限制的目录，例如 `D:\projects\fishing-platform`。项目支持中文路径，但答辩电脑使用简短英文路径更容易排查环境问题。
+
+### 2. 启动后端
+
+打开第一个 PowerShell，将示例路径替换为项目实际位置：
+
+```powershell
+Set-Location D:\projects\fishing-platform\backend
+mvn.cmd spring-boot:run
+```
+
+首次启动会下载 Maven 依赖，需要保持网络畅通。看到 `Tomcat started on port 18080` 后，后端即启动成功。不要关闭这个窗口。
+
+### 3. 启动前端
+
+打开第二个 PowerShell：
+
+```powershell
+Set-Location D:\projects\fishing-platform\frontend
+npm.cmd install
+npm.cmd run dev
+```
+
+看到 `Local` 地址后在浏览器打开，通常为 [http://127.0.0.1:5173](http://127.0.0.1:5173)。如果端口被占用，Vite 会自动使用 5174、5175 等后续端口，请以终端实际输出为准。
+
+演示账号：
+
+- 用户名：`admin`
+- 密码：`admin123`
+
+默认演示数据库位于内存中，停止并重新启动后端后会恢复初始演示数据。两个服务均可在对应 PowerShell 中按 `Ctrl+C` 停止。
+
+### 4. Windows 上执行验收
+
+后端测试：
+
+```powershell
+Set-Location D:\projects\fishing-platform\backend
+mvn.cmd test
+```
+
+前端检查：
+
+```powershell
+Set-Location D:\projects\fishing-platform\frontend
+npm.cmd run lint
+npm.cmd run typecheck
+npm.cmd run build
+```
+
+### 5. 常见问题
+
+- `mvn.cmd` 找不到：检查 Maven 是否已解压，并确认 `%MAVEN_HOME%\bin` 已加入 `Path`；修改环境变量后需要重新打开 PowerShell。
+- Maven 显示的 Java 不是 17：修正 `JAVA_HOME`，并确保 `%JAVA_HOME%\bin` 在旧 Java 路径之前。
+- PowerShell 提示禁止运行 `npm.ps1`：直接使用文档中的 `npm.cmd`，无需更改系统执行策略。
+- 前端提示网络连接失败：先确认后端窗口仍在运行，并检查 [http://127.0.0.1:18080/api/auth/registration](http://127.0.0.1:18080/api/auth/registration) 是否能返回 JSON。
+- 18080 端口被占用：使用 `netstat -ano | findstr :18080` 查找占用进程，关闭对应程序后再启动；也可以先设置 `$env:FISHING_SERVER_PORT=18081`，同时设置 `$env:VITE_API_PROXY_TARGET='http://127.0.0.1:18081'` 后分别启动后端和前端。
+- Maven 首次下载依赖较慢：等待下载完成，不要反复中断；校园网或公司网络若拦截 Maven Central，需要切换到可正常访问的网络。
+- 需要让同一局域网的其他设备访问：还需允许 Java 和 Node.js 通过 Windows 防火墙；仅在本机答辩展示时不需要开放防火墙。
+
 ## 使用 MySQL 8
 
 先创建空数据库，再通过环境变量启动 `mysql` 配置。Flyway 会自动建表并写入演示数据。
