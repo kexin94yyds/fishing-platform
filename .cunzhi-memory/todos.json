@@ -1,0 +1,40 @@
+{
+  "goal": "完成“湖畔运营所”差异化重设计、开放自助注册与全站高级体验升级",
+  "items": [
+    {
+      "id": "backend",
+      "title": "完成 Spring Boot、Flyway、认证和七项业务 API",
+      "status": "completed"
+    },
+    {
+      "id": "frontend",
+      "title": "完成 Vue 3 管理端、业务页面和客流图表",
+      "status": "completed"
+    },
+    {
+      "id": "validation",
+      "title": "执行测试、类型检查、生产构建和联调",
+      "status": "completed"
+    },
+    {
+      "id": "visual-qa",
+      "title": "完成 1280px 桌面端与 390×844 移动端逐页视觉检查",
+      "status": "completed"
+    },
+    {
+      "id": "registration",
+      "title": "完成运营人员自助注册、自动登录、数据库约束与权限边界",
+      "status": "completed"
+    },
+    {
+      "id": "redesign",
+      "title": "完成“湖畔运营所”差异化页面重设计与真实流程验收",
+      "status": "completed"
+    },
+    {
+      "id": "experience-upgrade",
+      "title": "完成全站资源状态、表单焦点、语义导航、快速前往与移动端体验收尾",
+      "status": "completed"
+    }
+  ]
+}

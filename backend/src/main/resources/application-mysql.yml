@@ -1,0 +1,9 @@
+spring:
+  datasource:
+    url: ${FISHING_DB_URL}
+    username: ${FISHING_DB_USERNAME}
+    password: ${FISHING_DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  h2:
+    console:
+      enabled: false
