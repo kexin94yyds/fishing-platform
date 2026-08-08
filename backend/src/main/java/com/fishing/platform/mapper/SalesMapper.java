@@ -25,6 +25,9 @@ public interface SalesMapper {
     @Select(ORDER_SELECT + " WHERE o.id = #{id}")
     SalesOrder findById(@Param("id") Long id);
 
+    @Select("SELECT id FROM sales_order WHERE id = #{id} FOR UPDATE")
+    Long lockById(@Param("id") Long id);
+
     @Select(ORDER_SELECT + " WHERE o.order_no = #{orderNo}")
     SalesOrder findByNo(@Param("orderNo") String orderNo);
 
@@ -69,4 +72,11 @@ public interface SalesMapper {
             WHERE id = #{id} AND payment_status = 'PENDING' AND status = 'PENDING_PAYMENT'
             """)
     int markPaid(@Param("id") Long id);
+
+    @Update("""
+            UPDATE sales_order
+            SET payment_status = 'CANCELLED', status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP
+            WHERE id = #{id} AND payment_status = 'PENDING' AND status = 'PENDING_PAYMENT'
+            """)
+    int markCancelled(@Param("id") Long id);
 }

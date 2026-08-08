@@ -12,7 +12,7 @@ import java.util.List;
 public interface ProductMapper {
 
     String BASE_SELECT = """
-            SELECT id, sku, name, category, price, stock_quantity, status, created_at, updated_at
+            SELECT id, sku, name, category, price, stock_quantity, status, version, created_at, updated_at
             FROM product
             """;
 
@@ -21,6 +21,9 @@ public interface ProductMapper {
 
     @Select(BASE_SELECT + " WHERE id = #{id}")
     Product findById(@Param("id") Long id);
+
+    @Select(BASE_SELECT + " WHERE id = #{id} FOR UPDATE")
+    Product findByIdForUpdate(@Param("id") Long id);
 
     @Select(BASE_SELECT + " WHERE sku = #{sku}")
     Product findBySku(@Param("sku") String sku);
@@ -39,8 +42,9 @@ public interface ProductMapper {
     @Update("""
             UPDATE product
             SET sku = #{sku}, name = #{name}, category = #{category}, price = #{price},
-                stock_quantity = #{stockQuantity}, status = #{status}, updated_at = CURRENT_TIMESTAMP
-            WHERE id = #{id}
+                stock_quantity = #{stockQuantity}, status = #{status},
+                version = version + 1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = #{id} AND version = #{version}
             """)
     int update(@Param("id") Long id,
                @Param("sku") String sku,
@@ -48,14 +52,24 @@ public interface ProductMapper {
                @Param("category") String category,
                @Param("price") BigDecimal price,
                @Param("stockQuantity") Integer stockQuantity,
-               @Param("status") String status);
+               @Param("status") String status,
+               @Param("version") Long version);
 
     @Update("""
             UPDATE product
-            SET stock_quantity = stock_quantity - #{quantity}, updated_at = CURRENT_TIMESTAMP
+            SET stock_quantity = stock_quantity - #{quantity},
+                version = version + 1, updated_at = CURRENT_TIMESTAMP
             WHERE id = #{id}
               AND status = 'ACTIVE'
               AND stock_quantity >= #{quantity}
             """)
     int decrementStock(@Param("id") Long id, @Param("quantity") Integer quantity);
+
+    @Update("""
+            UPDATE product
+            SET stock_quantity = stock_quantity + #{quantity},
+                version = version + 1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = #{id}
+            """)
+    int incrementStock(@Param("id") Long id, @Param("quantity") Integer quantity);
 }

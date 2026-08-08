@@ -42,8 +42,19 @@ public interface BookingMapper {
     @Select(BOOKING_SELECT + " WHERE b.id = #{id}")
     Booking findById(@Param("id") Long id);
 
+    @Select(BOOKING_SELECT + " WHERE b.id = #{id} FOR UPDATE")
+    Booking findByIdForUpdate(@Param("id") Long id);
+
     @Select(BOOKING_SELECT + " WHERE b.booking_no = #{bookingNo}")
     Booking findByNo(@Param("bookingNo") String bookingNo);
+
+    @Select("""
+            SELECT COUNT(*) > 0
+            FROM catch_record
+            WHERE booking_id = #{bookingId}
+              AND status != 'VOID'
+            """)
+    boolean hasActiveCatch(@Param("bookingId") Long bookingId);
 
     @Insert("""
             INSERT IGNORE INTO fishing_slot_inventory

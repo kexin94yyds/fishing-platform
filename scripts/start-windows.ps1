@@ -20,6 +20,8 @@ $backendPort = 18080
 $frontendPort = 5173
 $startedBackend = $null
 $startedFrontend = $null
+$originalBackendPortOverride = [Environment]::GetEnvironmentVariable("FISHING_SERVER_PORT", "Process")
+$originalApiProxyOverride = [Environment]::GetEnvironmentVariable("VITE_API_PROXY_TARGET", "Process")
 $startupMutex = New-Object System.Threading.Mutex($false, "Local\FishingPlatformStarter")
 $mutexAcquired = $false
 
@@ -134,13 +136,18 @@ function Stop-StartedProcess {
         [AllowNull()][System.Diagnostics.Process]$Process,
         [string]$PidFile
     )
-    if ($null -ne $Process) {
-        Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+    if ($null -eq $Process) {
+        return
     }
+    Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
     Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
 }
 
 try {
+    [Environment]::SetEnvironmentVariable("FISHING_SERVER_PORT", "$backendPort", "Process")
+    [Environment]::SetEnvironmentVariable(
+        "VITE_API_PROXY_TARGET", "http://127.0.0.1:$backendPort", "Process")
+
     try {
         $mutexAcquired = $startupMutex.WaitOne(0)
     }
@@ -163,6 +170,14 @@ try {
     }
 
     $mavenVersionText = (& $mavenCommand.Source -version 2>&1 | Out-String)
+    if ($mavenVersionText -notmatch 'Apache Maven ([0-9]+)[.]([0-9]+)') {
+        throw "Unable to read the Maven version: $($mavenVersionText.Trim())"
+    }
+    $mavenMajor = [int]$Matches[1]
+    $mavenMinor = [int]$Matches[2]
+    if ($mavenMajor -lt 3 -or ($mavenMajor -eq 3 -and $mavenMinor -lt 9)) {
+        throw "Maven 3.9 or newer is required. Current output: $($mavenVersionText.Trim())"
+    }
     if ($mavenVersionText -notmatch 'Java version: 17([.,]|$)') {
         throw "Maven is not using JDK 17. Fix JAVA_HOME, reopen PowerShell, and retry."
     }
@@ -296,6 +311,10 @@ catch {
     exit 1
 }
 finally {
+    [Environment]::SetEnvironmentVariable(
+        "FISHING_SERVER_PORT", $originalBackendPortOverride, "Process")
+    [Environment]::SetEnvironmentVariable(
+        "VITE_API_PROXY_TARGET", $originalApiProxyOverride, "Process")
     if ($mutexAcquired) {
         $startupMutex.ReleaseMutex()
     }

@@ -48,12 +48,14 @@ mvn spring-boot:run
 export FISHING_DB_URL='jdbc:mysql://127.0.0.1:3306/fishing_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai'
 export FISHING_DB_USERNAME='fishing_app'
 export FISHING_DB_PASSWORD='replace-me'
+export FISHING_BOOTSTRAP_ADMIN_USERNAME='admin'
+export FISHING_BOOTSTRAP_ADMIN_DISPLAY_NAME='系统管理员'
+export FISHING_BOOTSTRAP_ADMIN_PASSWORD='replace-with-12-plus-characters1'
 mvn spring-boot:run -Dspring-boot.run.profiles=mysql
 ```
 
-Flyway 会自动创建表和演示数据。生产环境应在部署后立即修改或停用演示账号。
-`mysql` 配置默认设置 `fishing.registration.enabled=false`；如确需覆盖，可设置
-环境变量 `FISHING_REGISTRATION_ENABLED=true`。
+为保持已执行 V1–V4 的数据库可继续前向迁移，Flyway 不改写旧迁移；MySQL 专属迁移会在应用可服务前停用随包演示口令。数据库中没有启用的管理员时，必须提供上述初始化变量，密码须为 12–64 位、含英文字母与数字且无空格；已有启用管理员时不会重置账号。连接池同时把 MySQL 会话时区固定为 `+08:00`。
+`mysql` 配置默认设置 `fishing.registration.enabled=false`；如确需覆盖，可设置环境变量 `FISHING_REGISTRATION_ENABLED=true`。
 
 ## 验证
 
@@ -61,8 +63,8 @@ Flyway 会自动创建表和演示数据。生产环境应在部署后立即修�
 mvn test
 ```
 
-22 项集成测试覆盖登录、角色授权与注册开关、Session 固定攻击防护、登录后 CSRF、重复预订、
+自动化测试覆盖登录、角色授权与注册开关、Session 固定攻击防护、登录后 CSRF、重复预订、
 并发抢占、非标准时段拦截、钓位容量缩减、钓区停用、关闭钓位的历史库存绕过、
-渔获关联预订的权威字段、读模型与 404、销售库存不足回滚、收款后业务单状态推进，
-以及看板与客流分析的实时事实一致性。当前自动化数据库为 H2 MySQL 兼容模式；
+渔获关联预订的权威字段、读模型与 404、商品版本冲突、销售库存不足回滚、订单取消回补、
+收款确认/取消互斥、MySQL 演示口令废止与安全管理员初始化，以及统计响应的一致性。主要自动化数据库为 H2 MySQL 兼容模式；
 MySQL 8 真环境仍需在可用环境或 CI/Testcontainers 中补充验证。

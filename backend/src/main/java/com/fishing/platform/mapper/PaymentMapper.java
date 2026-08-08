@@ -26,6 +26,16 @@ public interface PaymentMapper {
     @Select(BASE_SELECT + " WHERE p.id = #{id}")
     Payment findById(@Param("id") Long id);
 
+    @Select("""
+            SELECT p.id, p.payment_no, p.business_type, p.business_id,
+                   NULL AS business_no, p.amount, p.method, p.status,
+                   p.confirmed_at, p.created_at, p.updated_at
+            FROM payment p
+            WHERE p.id = #{id}
+            FOR UPDATE
+            """)
+    Payment findByIdForUpdate(@Param("id") Long id);
+
     @Select(BASE_SELECT + """
              WHERE p.business_type = #{businessType} AND p.business_id = #{businessId}
             """)
@@ -53,4 +63,12 @@ public interface PaymentMapper {
             WHERE id = #{id} AND status = 'PENDING'
             """)
     int confirm(@Param("id") Long id, @Param("method") String method);
+
+    @Update("""
+            UPDATE payment
+            SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP
+            WHERE business_type = #{businessType} AND business_id = #{businessId} AND status = 'PENDING'
+            """)
+    int cancelByBusiness(@Param("businessType") String businessType,
+                         @Param("businessId") Long businessId);
 }

@@ -110,7 +110,11 @@ const unpositionedSpots = computed(() =>
 )
 
 const selectedSpot = computed(() =>
-  mapSpots.value.find((spot) => String(spot.id) === String(selectedSpotId.value)),
+  mapSpots.value.find(
+    (spot) =>
+      String(spot.id) === String(selectedSpotId.value) &&
+      String(spot.zoneId) === String(selectedZoneId.value),
+  ),
 )
 
 function zoneSpotCount(zoneId: Id) {
@@ -124,6 +128,7 @@ function chooseZone(zoneId: Id) {
 }
 
 function chooseSpot(spot: Spot) {
+  selectedZoneId.value = spot.zoneId
   selectedSpotId.value = spot.id
 }
 
@@ -204,7 +209,13 @@ async function load() {
     if (!zones.value.some((zone) => String(zone.id) === String(selectedZoneId.value))) {
       selectedZoneId.value = zones.value[0]?.id ?? ''
     }
-    if (!mapSpots.value.some((spot) => String(spot.id) === String(selectedSpotId.value))) {
+    if (
+      !mapSpots.value.some(
+        (spot) =>
+          String(spot.id) === String(selectedSpotId.value) &&
+          String(spot.zoneId) === String(selectedZoneId.value),
+      )
+    ) {
       selectedSpotId.value =
         mapSpots.value.find((spot) => String(spot.zoneId) === String(selectedZoneId.value))?.id ?? ''
     }
@@ -247,6 +258,10 @@ async function saveSpot() {
     await focusFirstInvalid('.spot-record-form')
     return
   }
+  if ((spotForm.mapX === null) !== (spotForm.mapY === null)) {
+    ElMessage.warning('平面坐标必须同时填写或同时留空')
+    return
+  }
   saving.value = true
   try {
     const payload = {
@@ -262,6 +277,10 @@ async function saveSpot() {
     if (spotForm.id !== undefined) await spotApi.update(spotForm.id, payload)
     else await spotApi.create(payload)
     ElMessage.success(spotForm.id !== undefined ? '钓位已更新' : '钓位已创建')
+    if (spotForm.id !== undefined) {
+      selectedZoneId.value = spotForm.zoneId
+      selectedSpotId.value = spotForm.id
+    }
     spotDialogOpen.value = false
     await load()
   } catch (reason) {
@@ -391,7 +410,7 @@ onMounted(load)
                 <dt>平面坐标</dt>
                 <dd>
                   {{
-                    selectedSpot.mapX !== undefined && selectedSpot.mapY !== undefined
+                    selectedSpot.mapX != null && selectedSpot.mapY != null
                       ? `${selectedSpot.mapX}, ${selectedSpot.mapY}`
                       : '未定位'
                   }}
@@ -455,7 +474,7 @@ onMounted(load)
           <el-table-column prop="zoneName" label="所属湖区" min-width="120" />
           <el-table-column label="坐标" min-width="110">
             <template #default="{ row }">
-              {{ row.mapX ?? '未定' }}, {{ row.mapY ?? '未定' }}
+              {{ row.mapX != null && row.mapY != null ? `${row.mapX}, ${row.mapY}` : '未定位' }}
             </template>
           </el-table-column>
           <el-table-column label="容量" width="90">

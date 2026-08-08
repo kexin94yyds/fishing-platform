@@ -5,6 +5,7 @@ import com.fishing.platform.domain.DomainModels.Member;
 import com.fishing.platform.dto.ApiDtos.MemberRequest;
 import com.fishing.platform.mapper.MemberMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -31,8 +32,9 @@ public class MemberService {
         return mapper.findByNo(memberNo);
     }
 
+    @Transactional
     public Member update(Long id, MemberRequest request) {
-        Member existing = mapper.findById(id);
+        Member existing = mapper.findByIdForUpdate(id);
         if (existing == null) {
             throw new NotFoundException("会员不存在");
         }

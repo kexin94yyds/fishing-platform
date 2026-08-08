@@ -49,9 +49,17 @@ const alerts = computed(() => [
 ])
 
 const trafficOption = computed<EChartsOption>(() => ({
+  aria: { enabled: true },
   color: ['#205747'],
   tooltip: { trigger: 'axis', renderMode: 'richText' },
-  grid: { left: 8, right: 12, top: 20, bottom: 6, containLabel: true },
+  grid: {
+    left: 8,
+    right: 12,
+    top: 20,
+    bottom: 6,
+    outerBoundsMode: 'same',
+    outerBoundsContain: 'axisLabel',
+  },
   xAxis: {
     type: 'category',
     boundaryGap: false,
@@ -158,6 +166,14 @@ onMounted(load)
                 height="220px"
                 label="近期湖区客流趋势"
               />
+              <details v-if="summary?.trafficTrend.length" class="traffic-data-details">
+                <summary>查看客流数据</summary>
+                <ul>
+                  <li v-for="point in summary.trafficTrend" :key="point.label">
+                    {{ point.label }}：{{ point.value }} 人
+                  </li>
+                </ul>
+              </details>
             </div>
           </div>
         </div>
@@ -229,6 +245,26 @@ onMounted(load)
 </template>
 
 <style scoped>
+.traffic-data-details {
+  margin: 6px 12px 12px;
+  color: #63716b;
+  font-size: 10px;
+}
+
+.traffic-data-details summary {
+  cursor: pointer;
+  color: var(--lake-700);
+  font-weight: 700;
+}
+
+.traffic-data-details ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
 .duty-brief {
   display: flex;
   align-items: flex-start;

@@ -20,6 +20,10 @@ import type {
 } from '@/types'
 
 type Query = Record<string, string | number | boolean | undefined>
+type ProductUpdatePayload = Pick<
+  Product,
+  'sku' | 'name' | 'category' | 'price' | 'stockQuantity' | 'status' | 'version'
+>
 
 export const authApi = {
   csrf: () => request<unknown>({ url: '/auth/csrf', method: 'GET' }),
@@ -116,7 +120,7 @@ export const productApi = {
       toPage<Product>(data, ['products']),
     ),
   create: (data: Partial<Product>) => request<Product>({ url: '/products', method: 'POST', data }),
-  update: (id: Product['id'], data: Partial<Product>) =>
+  update: (id: Product['id'], data: ProductUpdatePayload) =>
     request<Product>({ url: `/products/${id}`, method: 'PUT', data }),
 }
 
@@ -127,6 +131,8 @@ export const saleOrderApi = {
     ),
   create: (data: SaleCreatePayload) =>
     request<SaleCreateResult>({ url: '/sales-orders', method: 'POST', data }),
+  cancel: (id: SaleOrder['id']) =>
+    request<SaleOrder>({ url: `/sales-orders/${id}/cancel`, method: 'POST' }),
 }
 
 export const paymentApi = {

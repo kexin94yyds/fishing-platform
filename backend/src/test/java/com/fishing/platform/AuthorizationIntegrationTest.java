@@ -10,6 +10,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -37,6 +38,9 @@ class AuthorizationIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @Test
     void operatorCanRunDailyWorkButCannotChangeAdminConfigurationOrConfirmPayment() throws Exception {
@@ -88,12 +92,50 @@ class AuthorizationIntegrationTest {
         assertForbidden(post("/api/products"), session, csrf);
         assertForbidden(put("/api/products/1"), session, csrf);
         assertForbidden(post("/api/payments/999999/confirm"), session, csrf);
+        assertForbidden(post("/api/sales-orders/1/cancel"), session, csrf);
 
         assertEquals(zoneCount, count("fishing_zone"));
         assertEquals(spotCount, count("fishing_spot"));
         assertEquals(productCount, count("product"));
         assertEquals(paymentStatus, jdbcTemplate.queryForObject(
                 "SELECT status FROM payment WHERE id = 1", String.class));
+    }
+
+    @Test
+    void databaseRoleAndEnabledChangesTakeEffectForExistingSession() throws Exception {
+        String username = "state_admin";
+        String password = "StateAdmin123";
+        jdbcTemplate.update("""
+                INSERT INTO app_user (username, password_hash, display_name, role, enabled)
+                VALUES (?, ?, ?, 'ADMIN', TRUE)
+                """, username, passwordEncoder.encode(password), "状态校验管理员");
+
+        MockHttpSession session = new MockHttpSession();
+        CsrfCredentials csrf = csrf(session);
+        mockMvc.perform(post("/api/auth/login")
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                java.util.Map.of("username", username, "password", password))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.role", is("ADMIN")));
+        csrf = csrf(session);
+
+        jdbcTemplate.update("UPDATE app_user SET role = 'OPERATOR' WHERE username = ?", username);
+        mockMvc.perform(put("/api/products/1")
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.role", is("OPERATOR")));
+
+        jdbcTemplate.update("UPDATE app_user SET enabled = FALSE WHERE username = ?", username);
+        mockMvc.perform(get("/api/dashboard/summary").session(session))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message", is("登录状态已失效")));
     }
 
     private void assertForbidden(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request,

@@ -21,6 +21,9 @@ public interface MemberMapper {
     @Select(BASE_SELECT + " WHERE id = #{id}")
     Member findById(@Param("id") Long id);
 
+    @Select(BASE_SELECT + " WHERE id = #{id} FOR UPDATE")
+    Member findByIdForUpdate(@Param("id") Long id);
+
     @Select(BASE_SELECT + " WHERE member_no = #{memberNo}")
     Member findByNo(@Param("memberNo") String memberNo);
 

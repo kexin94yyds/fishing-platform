@@ -2,9 +2,12 @@ package com.fishing.platform.mapper;
 
 import com.fishing.platform.domain.DomainModels.DashboardMetric;
 import com.fishing.platform.domain.DomainModels.RecentBooking;
+import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface DashboardMapper {
@@ -17,8 +20,8 @@ public interface DashboardMapper {
             """)
     long openSpots();
 
-    @Select("SELECT COUNT(*) FROM booking WHERE fishing_date = CURRENT_DATE AND status != 'CANCELLED'")
-    long todayBookings();
+    @Select("SELECT COUNT(*) FROM booking WHERE fishing_date = #{today} AND status != 'CANCELLED'")
+    long todayBookings(@Param("today") LocalDate today);
 
     @Select("SELECT COUNT(*) FROM member WHERE status = 'ACTIVE'")
     long activeMembers();
@@ -27,16 +30,17 @@ public interface DashboardMapper {
             SELECT COALESCE(SUM(amount), 0)
             FROM payment
             WHERE status = 'PAID'
-              AND confirmed_at >= CURRENT_DATE
-              AND confirmed_at < CURRENT_DATE + INTERVAL '1' DAY
+              AND confirmed_at >= #{dayStart}
+              AND confirmed_at < #{dayEnd}
             """)
-    BigDecimal todayRevenue();
+    BigDecimal todayRevenue(@Param("dayStart") LocalDateTime dayStart,
+                            @Param("dayEnd") LocalDateTime dayEnd);
 
     @Select("SELECT COUNT(*) FROM product WHERE status = 'ACTIVE' AND stock_quantity <= 10")
     long lowStockProducts();
 
-    @Select("SELECT COALESCE(SUM(quantity), 0) FROM catch_record WHERE fishing_date = CURRENT_DATE AND status != 'VOID'")
-    long todayCatchCount();
+    @Select("SELECT COALESCE(SUM(quantity), 0) FROM catch_record WHERE fishing_date = #{today} AND status != 'VOID'")
+    long todayCatchCount(@Param("today") LocalDate today);
 
     @Select("SELECT COUNT(*) FROM payment WHERE status = 'PENDING'")
     long pendingPayments();
@@ -44,11 +48,11 @@ public interface DashboardMapper {
     @Select("""
             SELECT status AS name, COUNT(*) AS metric_value
             FROM booking
-            WHERE fishing_date = CURRENT_DATE
+            WHERE fishing_date = #{today}
             GROUP BY status
             ORDER BY status
             """)
-    List<DashboardMetric> bookingMix();
+    List<DashboardMetric> bookingMix(@Param("today") LocalDate today);
 
     @Select("""
             SELECT b.booking_no, m.name AS member_name, s.name AS spot_name,

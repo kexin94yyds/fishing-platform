@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 public interface SpotMapper {
@@ -24,6 +25,9 @@ public interface SpotMapper {
 
     @Select(BASE_SELECT + " WHERE s.id = #{id}")
     Spot findById(@Param("id") Long id);
+
+    @Select("SELECT id FROM fishing_spot WHERE id = #{id} FOR UPDATE")
+    Long lockById(@Param("id") Long id);
 
     @Select(BASE_SELECT + " WHERE s.code = #{code}")
     Spot findByCode(@Param("code") String code);
@@ -52,14 +56,41 @@ public interface SpotMapper {
                 map_x = #{mapX}, map_y = #{mapY}, capacity = #{capacity},
                 status = #{status}, note = #{note}, updated_at = CURRENT_TIMESTAMP
             WHERE id = #{id}
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM fishing_slot_inventory i
+                  WHERE i.spot_id = #{id}
+                    AND i.fishing_date >= #{fromDate}
+                    AND i.reserved_count > #{capacity}
+              )
             """)
-    int update(@Param("id") Long id,
-               @Param("zoneId") Long zoneId,
-               @Param("code") String code,
-               @Param("name") String name,
-               @Param("mapX") BigDecimal mapX,
-               @Param("mapY") BigDecimal mapY,
-               @Param("capacity") Integer capacity,
-               @Param("status") String status,
-               @Param("note") String note);
+    int updateIfCapacityAllows(@Param("id") Long id,
+                               @Param("zoneId") Long zoneId,
+                               @Param("code") String code,
+                               @Param("name") String name,
+                               @Param("mapX") BigDecimal mapX,
+                               @Param("mapY") BigDecimal mapY,
+                               @Param("capacity") Integer capacity,
+                               @Param("status") String status,
+                               @Param("note") String note,
+                               @Param("fromDate") LocalDate fromDate);
+
+    @Update("""
+            UPDATE fishing_slot_inventory
+            SET capacity = #{capacity}, updated_at = CURRENT_TIMESTAMP
+            WHERE spot_id = #{spotId}
+              AND fishing_date >= #{fromDate}
+            """)
+    int updateFutureInventoryCapacity(@Param("spotId") Long spotId,
+                                      @Param("capacity") Integer capacity,
+                                      @Param("fromDate") LocalDate fromDate);
+
+    @Select("""
+            SELECT COALESCE(MAX(i.reserved_count), 0)
+            FROM fishing_slot_inventory i
+            WHERE i.spot_id = #{spotId}
+              AND i.fishing_date >= #{fromDate}
+            """)
+    int maximumActiveReservationCount(@Param("spotId") Long spotId,
+                                      @Param("fromDate") LocalDate fromDate);
 }

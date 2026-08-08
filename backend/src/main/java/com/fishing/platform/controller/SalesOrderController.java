@@ -7,15 +7,19 @@ import com.fishing.platform.service.SalesService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.validation.constraints.Positive;
+import org.springframework.validation.annotation.Validated;
 
 import java.util.List;
 import java.util.Map;
 
+@Validated
 @RestController
 @RequestMapping("/api/sales-orders")
 public class SalesOrderController {
@@ -34,5 +38,10 @@ public class SalesOrderController {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<Map<String, Object>> create(@Valid @RequestBody SalesOrderRequest request) {
         return ApiResponse.ok("销售单已创建，等待收款", service.create(request));
+    }
+
+    @PostMapping("/{id}/cancel")
+    public ApiResponse<SalesOrder> cancel(@PathVariable @Positive Long id) {
+        return ApiResponse.ok("销售单已取消，库存已回补", service.cancel(id));
     }
 }

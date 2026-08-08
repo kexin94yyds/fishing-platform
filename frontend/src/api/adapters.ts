@@ -106,7 +106,9 @@ export function toTraffic(payload: unknown): TrafficAnalytics {
     days: asNumber(value.days) ?? series.length,
     series,
     totalVisitors: series.length ? sum((point) => point.visits) : null,
-    uniqueVisitors: series.length ? sum((point) => point.uniqueVisitors) : null,
+    peakDailyUniqueVisitors: series.length
+      ? Math.max(...series.map((point) => point.uniqueVisitors))
+      : null,
     newMembers: series.length ? sum((point) => point.newMembers) : null,
     bookingCount: series.length ? sum((point) => point.bookingCount) : null,
     revenue: series.length ? sum((point) => point.revenue) : null,

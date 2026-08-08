@@ -4,6 +4,8 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+    hikari:
+      connection-init-sql: SET TIME ZONE '+08:00'
   h2:
     console:
       enabled: false

@@ -14,9 +14,9 @@
 2. 钓区与钓位管理：维护分区、钓位、容量、开放状态和语义地图坐标
 3. 时段预订：查询余量、创建和取消预订，以事务和条件更新防止超额预订
 4. 渔获登记：维护品种、重量、数量、会员及关联预订
-5. 渔具售卖：维护商品库存并创建现场销售单，库存不足时整单回滚
+5. 渔具售卖：维护商品库存并创建现场销售单，库存不足时整单回滚；待收款订单可取消并精确回补库存
 6. 会员管理：维护会员编号、联系方式、等级、积分和状态
-7. 收费订单：查看销售单待收款记录并人工确认，联动销售单状态
+7. 收费订单：查看销售单待收款记录，人工确认到账或取消待收订单，联动销售单与库存状态
 8. 客流分析：展示客流、访客、会员、预订和收入趋势；预约、会员和营收均从业务事实表实时聚合
 
 权限边界如下：运营人员可处理预约、渔获、会员和现场销售，但不能维护分区钓位、商品资料与库存，也不能确认到账；这些管理操作仅管理员可执行。前端会隐藏无权入口，后端同时强制校验角色。
@@ -92,6 +92,7 @@ npm.cmd --version
 4. 服务就绪后，脚本会自动打开 [http://127.0.0.1:5173](http://127.0.0.1:5173)。
 
 一键脚本会自动完成环境版本检查、前端依赖安装、后端打包、端口检查、前后端启动和健康检查。运行日志与进程编号保存在项目根目录的 `.runtime` 文件夹中；该文件夹不会进入 Git。
+一键模式固定使用后端 18080、前端 5173；脚本会为子进程覆盖已有的 `FISHING_SERVER_PORT` 和 `VITE_API_PROXY_TARGET`，退出时恢复原值，避免历史环境变量导致健康检查地址与实际端口不一致。
 
 重复双击启动脚本时，已运行的服务会被复用，不会重复启动。需要关闭系统时，双击项目根目录的 `停止系统.bat`。停止脚本只会终止由本项目记录且仍占用 18080/5173 端口的 Java、Node.js 进程，不会按进程名称批量结束其他程序。
 
@@ -158,17 +159,20 @@ npm.cmd run build
 
 ## 使用 MySQL 8
 
-先创建空数据库，再通过环境变量启动 `mysql` 配置。Flyway 会自动建表并写入演示数据。
+先创建空数据库，再通过环境变量启动 `mysql` 配置。为兼容已经执行 V1–V4 的数据库，Flyway 会保留原迁移历史，但 MySQL 专属前向迁移会在服务启动前停用随包演示口令。若数据库中尚无启用的管理员，启动会要求部署方提供安全的初始管理员凭据；项目不提供 MySQL 默认密码。
 
 ```bash
 cd backend
 export FISHING_DB_URL='jdbc:mysql://127.0.0.1:3306/fishing_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai'
 export FISHING_DB_USERNAME='root'
 export FISHING_DB_PASSWORD='your-password'
+export FISHING_BOOTSTRAP_ADMIN_USERNAME='admin'
+export FISHING_BOOTSTRAP_ADMIN_DISPLAY_NAME='系统管理员'
+export FISHING_BOOTSTRAP_ADMIN_PASSWORD='replace-with-12-plus-characters1'
 mvn spring-boot:run -Dspring-boot.run.profiles=mysql
 ```
 
-数据库账号与密码不写入项目文件。
+初始管理员密码须为 12–64 位，至少包含一个英文字母和一个数字，且不能包含空格。数据库中已经存在启用的管理员时，后续启动可不再提供这三个初始化变量，现有账号也不会被重置或提权。数据库连接与管理员密码均不写入项目文件；MySQL 连接池会把每条连接的会话时区固定为 `+08:00`。
 
 `mysql` 配置默认关闭公开注册。部署方如确需开放，应显式设置
 `FISHING_REGISTRATION_ENABLED=true`，并先评估账号审批与人员管理流程。
@@ -185,7 +189,7 @@ npm run typecheck
 npm run build
 ```
 
-当前 Java 17 + H2 MySQL 兼容模式共有 22 项后端集成测试。MySQL 8 真环境尚未纳入自动化验证；本机验证曾受 Homebrew MySQL 动态库损坏阻断，因此部署前仍应在可用的 MySQL 8 或 CI/Testcontainers 环境执行迁移与接口回归。
+后端自动化测试覆盖 H2 MySQL 兼容模式、MySQL 专属迁移与安全管理员初始化；MySQL 8 真环境尚未纳入自动化验证，因此部署前仍应在可用的 MySQL 8 或 CI/Testcontainers 环境执行迁移与接口回归。
 
 ## 目录结构
 

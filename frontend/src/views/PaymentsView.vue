@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Check, Refresh, Search } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Check, Close, Refresh, Search } from '@element-plus/icons-vue'
 import ResourceState from '@/components/ResourceState.vue'
 import LakeEmptyState from '@/components/LakeEmptyState.vue'
 import StatusTag from '@/components/StatusTag.vue'
@@ -25,6 +25,7 @@ const orders = ref<SaleOrder[]>([])
 const keyword = ref('')
 const statusFilter = ref('')
 const confirmingId = ref<Payment['id'] | null>(null)
+const cancellingId = ref<Payment['id'] | null>(null)
 const confirmDialogOpen = ref(false)
 const selectedPayment = ref<Payment | null>(null)
 const paymentMethod = ref('CASH')
@@ -93,6 +94,33 @@ async function confirmPayment() {
   }
 }
 
+async function cancelSale(payment: Payment) {
+  if (
+    !canConfirmPayments.value ||
+    payment.businessType !== 'SALES_ORDER' ||
+    payment.businessId === undefined
+  ) return
+  try {
+    await ElMessageBox.confirm(
+      `确认取消销售单 ${payment.businessNo || payment.businessId} 吗？已扣商品将自动回补库存。`,
+      '取消待收款销售单',
+      {
+        confirmButtonText: '取消并回补',
+        cancelButtonText: '返回',
+        type: 'warning',
+      },
+    )
+    cancellingId.value = payment.id
+    await saleOrderApi.cancel(payment.businessId)
+    ElMessage.success('销售单已取消，商品库存已回补')
+    await load()
+  } catch (reason) {
+    if (reason !== 'cancel' && reason !== 'close') ElMessage.error(errorMessage(reason))
+  } finally {
+    cancellingId.value = null
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -147,15 +175,27 @@ onMounted(load)
               </div>
               <div class="payment-ticket__foot">
                 <span>{{ payment.paymentNo || payment.id }}</span>
-                <el-button
-                  v-if="canConfirmPayments"
-                  type="primary"
-                  :icon="Check"
-                  :loading="confirmingId === payment.id"
-                  @click="openConfirm(payment)"
-                >
-                  核实到账
-                </el-button>
+                <div class="payment-ticket__actions">
+                  <el-button
+                    v-if="canConfirmPayments"
+                    type="primary"
+                    :icon="Check"
+                    :loading="confirmingId === payment.id"
+                    @click="openConfirm(payment)"
+                  >
+                    核实到账
+                  </el-button>
+                  <el-button
+                    v-if="canConfirmPayments && payment.businessType === 'SALES_ORDER'"
+                    type="danger"
+                    plain
+                    :icon="Close"
+                    :loading="cancellingId === payment.id"
+                    @click="cancelSale(payment)"
+                  >
+                    取消订单
+                  </el-button>
+                </div>
               </div>
             </article>
           </div>
@@ -183,6 +223,7 @@ onMounted(load)
               >
                 <el-option label="待确认" value="PENDING" />
                 <el-option label="已确认" value="PAID" />
+                <el-option label="已取消" value="CANCELLED" />
                 <el-option label="失败" value="FAILED" />
               </el-select>
             </div>
@@ -245,6 +286,16 @@ onMounted(load)
                     @click="openConfirm(payment)"
                   >
                     核实到账
+                  </el-button>
+                  <el-button
+                    v-if="canConfirmPayments && payment.status === 'PENDING' && payment.businessType === 'SALES_ORDER'"
+                    link
+                    type="danger"
+                    :loading="cancellingId === payment.id"
+                    :aria-label="`取消销售单 ${payment.businessNo || payment.businessId}`"
+                    @click="cancelSale(payment)"
+                  >
+                    取消订单
                   </el-button>
                 </div>
               </article>
@@ -459,6 +510,17 @@ onMounted(load)
 
 .payment-ticket__foot {
   margin-top: 11px;
+}
+
+.payment-ticket__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.payment-ticket__actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 
 .ledger-book {

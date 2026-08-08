@@ -5,8 +5,11 @@ import com.fishing.platform.domain.DomainModels.DailyAmount;
 import com.fishing.platform.domain.DomainModels.DailyCount;
 import com.fishing.platform.domain.DomainModels.TrafficPoint;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -17,11 +20,14 @@ import java.util.stream.IntStream;
 @Service
 public class AnalyticsService {
     private final AnalyticsMapper mapper;
+    private final Clock businessClock;
 
-    public AnalyticsService(AnalyticsMapper mapper) {
+    public AnalyticsService(AnalyticsMapper mapper, Clock businessClock) {
         this.mapper = mapper;
+        this.businessClock = businessClock;
     }
 
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Map<String, Object> traffic(int requestedDays) {
         int days = Math.max(1, Math.min(90, requestedDays));
         Map<String, Object> result = new LinkedHashMap<>();
@@ -30,9 +36,10 @@ public class AnalyticsService {
         return result;
     }
 
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public List<TrafficPoint> trafficSeries(int requestedDays) {
         int days = Math.max(1, Math.min(90, requestedDays));
-        LocalDate startDate = LocalDate.now().minusDays(days - 1L);
+        LocalDate startDate = LocalDate.now(businessClock).minusDays(days - 1L);
 
         Map<LocalDate, TrafficPoint> trafficByDate = new HashMap<>();
         mapper.trafficObservations(startDate)

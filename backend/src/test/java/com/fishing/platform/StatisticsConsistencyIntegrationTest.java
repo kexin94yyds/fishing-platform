@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -72,6 +73,18 @@ class StatisticsConsistencyIntegrationTest {
         } finally {
             jdbcTemplate.update("UPDATE fishing_zone SET status = 'ACTIVE' WHERE id = 2");
         }
+    }
+
+    @Test
+    void demoDatabaseSessionUsesShanghaiCalendarAtUtcBoundary() {
+        Integer timezoneHour = jdbcTemplate.queryForObject(
+                "SELECT EXTRACT(TIMEZONE_HOUR FROM CURRENT_TIMESTAMP)", Integer.class);
+        LocalDate shanghaiDate = jdbcTemplate.queryForObject(
+                "SELECT CAST(TIMESTAMP WITH TIME ZONE '2026-08-07 16:30:00+00:00' AS DATE)",
+                LocalDate.class);
+
+        assertEquals(8, timezoneHour);
+        assertEquals(LocalDate.of(2026, 8, 8), shanghaiDate);
     }
 
     private JsonNode getJson(String path, MockHttpSession session) throws Exception {

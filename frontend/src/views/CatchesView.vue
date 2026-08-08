@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Edit, Plus, Refresh, Search } from '@element-plus/icons-vue'
@@ -10,6 +10,7 @@ import { bookingApi, catchApi, memberApi, spotApi } from '@/api'
 import { errorMessage } from '@/api/http'
 import { formatDate, formatNumber } from '@/utils/format'
 import { focusFirstInvalid } from '@/utils/forms'
+import { businessDateValue, calendarDateValue } from '@/utils/businessTime'
 import type { Booking, CatchRecord, Id, Member, Spot } from '@/types'
 
 const loading = ref(true)
@@ -95,6 +96,47 @@ const totalWeight = computed(() =>
 )
 
 const bookingLinked = computed(() => form.bookingId !== '')
+const todayValue = ref(businessDateValue())
+const originalAssociation = ref<{
+  bookingId: Id | ''
+  memberId: Id | ''
+  spotId: Id | ''
+  fishingDate: string
+} | null>(null)
+const voidAssociationLocked = computed(
+  () => form.id !== undefined && form.status === 'VOID',
+)
+const associationLocked = computed(() => bookingLinked.value || voidAssociationLocked.value)
+const eligibleBookings = computed(() =>
+  bookings.value.filter(isBookingEligible),
+)
+const selectableBookings = computed(() => {
+  const result = [...eligibleBookings.value]
+  if (form.bookingId && !result.some((item) => String(item.id) === String(form.bookingId))) {
+    const original = bookings.value.find((item) => String(item.id) === String(form.bookingId))
+    if (original) result.unshift(original)
+  }
+  return result
+})
+
+function isBookingEligible(booking: Booking) {
+  return booking.status === 'CONFIRMED' && booking.fishingDate <= todayValue.value
+}
+
+function disableFutureDate(date: Date) {
+  return calendarDateValue(date) > todayValue.value
+}
+
+function restoreOriginalAssociation() {
+  if (originalAssociation.value) Object.assign(form, originalAssociation.value)
+}
+
+watch(
+  () => form.status,
+  (status) => {
+    if (status === 'VOID' && form.id !== undefined) restoreOriginalAssociation()
+  },
+)
 
 function toggleSpecies(species: string) {
   speciesFilter.value = speciesFilter.value === species ? '' : species
@@ -122,6 +164,18 @@ async function load() {
 }
 
 function openForm(record?: CatchRecord) {
+  todayValue.value = businessDateValue()
+  const linkedBooking = record?.bookingId
+    ? bookings.value.find((booking) => String(booking.id) === String(record.bookingId))
+    : undefined
+  originalAssociation.value = record
+    ? {
+        bookingId: record.bookingId ?? '',
+        memberId: record.memberId ?? '',
+        spotId: record.spotId,
+        fishingDate: record.fishingDate,
+      }
+    : null
   Object.assign(form, {
     id: record?.id,
     bookingId: record?.bookingId ?? '',
@@ -134,6 +188,9 @@ function openForm(record?: CatchRecord) {
     status: record?.status ?? 'RECORDED',
     notes: record?.notes ?? '',
   })
+  if (record?.bookingId && linkedBooking && !isBookingEligible(linkedBooking)) {
+    ElMessage.warning('原关联预订已失效；关联信息须保留，该档案只能按原关联作废')
+  }
   formRef.value?.clearValidate()
   dialogOpen.value = true
 }
@@ -148,6 +205,7 @@ function applyBooking(bookingId: Id | '') {
 }
 
 async function save() {
+  if (form.status === 'VOID' && form.id !== undefined) restoreOriginalAssociation()
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) {
     await focusFirstInvalid('.catch-record-form')
@@ -343,13 +401,15 @@ onMounted(load)
               v-model="form.bookingId"
               clearable
               filterable
+              :disabled="voidAssociationLocked"
               aria-label="关联预订"
               placeholder="可选…"
+              no-data-text="暂无可登记的有效预订"
               style="width: 100%"
               @change="applyBooking"
             >
               <el-option
-                v-for="booking in bookings"
+                v-for="booking in selectableBookings"
                 :key="booking.id"
                 :label="`${booking.bookingNo || booking.id} ${booking.spotName || ''}`"
                 :value="booking.id"
@@ -357,10 +417,10 @@ onMounted(load)
             </el-select>
           </el-form-item>
           <el-alert
-            v-if="bookingLinked"
+            v-if="associationLocked"
             class="form-span-2"
-            title="会员、钓位和日期已按关联预订锁定"
-            description="如需单独调整这些信息，请先清空关联预订。"
+            :title="voidAssociationLocked ? '作废仅改变档案状态，关联信息保持不变' : '会员、钓位和日期已按关联预订锁定'"
+            :description="voidAssociationLocked ? '关联预订、会员、钓位和日期不可在作废时修改。' : '如需单独调整这些信息，请先清空关联预订。'"
             type="info"
             :closable="false"
             show-icon
@@ -370,7 +430,7 @@ onMounted(load)
               v-model="form.memberId"
               clearable
               filterable
-              :disabled="bookingLinked"
+              :disabled="associationLocked"
               aria-label="关联会员"
               placeholder="散客可不选…"
               style="width: 100%"
@@ -387,7 +447,7 @@ onMounted(load)
             <el-select
               v-model="form.spotId"
               filterable
-              :disabled="bookingLinked"
+              :disabled="associationLocked"
               aria-label="钓位"
               style="width: 100%"
             >
@@ -404,7 +464,8 @@ onMounted(load)
               v-model="form.fishingDate"
               type="date"
               value-format="YYYY-MM-DD"
-              :disabled="bookingLinked"
+              :disabled="associationLocked"
+              :disabled-date="disableFutureDate"
               aria-label="垂钓日期"
               placeholder="请选择日期…"
               style="width: 100%"

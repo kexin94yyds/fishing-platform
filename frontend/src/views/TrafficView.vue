@@ -14,10 +14,19 @@ const days = ref(7)
 const loading = ref(true)
 const error = ref('')
 const data = ref<TrafficAnalytics | null>(null)
+const hasTrafficData = computed(() =>
+  (data.value?.series ?? []).some((point) => point.visits > 0 || point.uniqueVisitors > 0),
+)
+const hasOperationData = computed(() =>
+  (data.value?.series ?? []).some((point) => point.bookingCount > 0 || point.newMembers > 0),
+)
+const hasRevenueData = computed(() =>
+  (data.value?.series ?? []).some((point) => point.revenue > 0),
+)
 
 const busiestPoint = computed(() => {
   const series = data.value?.series ?? []
-  if (!series.length) return null
+  if (!series.some((point) => point.visits > 0)) return null
   return series.reduce((best, point) => (point.visits > best.visits ? point : best))
 })
 
@@ -30,9 +39,17 @@ const dailyAverage = computed(() => {
 })
 
 const trendOption = computed<EChartsOption>(() => ({
+  aria: { enabled: true },
   color: ['#17463a', '#b46145'],
   tooltip: { trigger: 'axis', renderMode: 'richText' },
-  grid: { left: 12, right: 18, top: 28, bottom: 8, containLabel: true },
+  grid: {
+    left: 12,
+    right: 18,
+    top: 28,
+    bottom: 8,
+    outerBoundsMode: 'same',
+    outerBoundsContain: 'axisLabel',
+  },
   xAxis: {
     type: 'category',
     data: data.value?.series.map((item) => item.statDate) ?? [],
@@ -67,9 +84,17 @@ const trendOption = computed<EChartsOption>(() => ({
 }))
 
 const operationOption = computed<EChartsOption>(() => ({
+  aria: { enabled: true },
   color: ['#17463a', '#b46145'],
   tooltip: { trigger: 'axis', renderMode: 'richText', axisPointer: { type: 'shadow' } },
-  grid: { left: 12, right: 18, top: 24, bottom: 8, containLabel: true },
+  grid: {
+    left: 12,
+    right: 18,
+    top: 24,
+    bottom: 8,
+    outerBoundsMode: 'same',
+    outerBoundsContain: 'axisLabel',
+  },
   xAxis: {
     type: 'category',
     data: data.value?.series.map((item) => item.statDate) ?? [],
@@ -149,8 +174,8 @@ onMounted(load)
 
           <dl>
             <div>
-              <dt>独立访客</dt>
-              <dd class="metric-value">{{ formatNumber(data?.uniqueVisitors, ' 人') }}</dd>
+              <dt>单日独立访客峰值</dt>
+              <dd class="metric-value">{{ formatNumber(data?.peakDailyUniqueVisitors, ' 人') }}</dd>
             </div>
             <div>
               <dt>日均到访</dt>
@@ -191,7 +216,7 @@ onMounted(load)
             </div>
           </header>
           <LakeEmptyState
-            v-if="!data?.series.length"
+            v-if="!hasTrafficData"
             title="暂无客流趋势"
             description="选择其他统计周期，或等待新的到访数据"
             compact
@@ -202,6 +227,19 @@ onMounted(load)
             height="380px"
             label="到访与独立访客趋势图"
           />
+          <details v-if="hasTrafficData" class="data-table-details">
+            <summary>查看到访趋势数据表</summary>
+            <table>
+              <thead><tr><th>日期</th><th>到访人数</th><th>独立访客</th></tr></thead>
+              <tbody>
+                <tr v-for="point in data?.series" :key="`traffic-${point.statDate}`">
+                  <th>{{ dateLabel(point.statDate) }}</th>
+                  <td>{{ point.visits }}</td>
+                  <td>{{ point.uniqueVisitors }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </details>
           <footer>
             <span>横轴按统计接口返回日期排列</span>
             <span>当前周期 {{ data?.series.length ?? 0 }} 个数据点</span>
@@ -219,7 +257,7 @@ onMounted(load)
             <p>观察到访后形成预订和会员沉淀的日变化。</p>
           </header>
           <LakeEmptyState
-            v-if="!data?.series.length"
+            v-if="!hasOperationData"
             title="暂无运营数据"
             description="当前周期还没有预订或新增会员记录"
             compact
@@ -230,6 +268,19 @@ onMounted(load)
             height="290px"
             label="每日预订与新增会员图"
           />
+          <details v-if="hasOperationData" class="data-table-details">
+            <summary>查看运营趋势数据表</summary>
+            <table>
+              <thead><tr><th>日期</th><th>预订量</th><th>新增会员</th></tr></thead>
+              <tbody>
+                <tr v-for="point in data?.series" :key="`operation-${point.statDate}`">
+                  <th>{{ dateLabel(point.statDate) }}</th>
+                  <td>{{ point.bookingCount }}</td>
+                  <td>{{ point.newMembers }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </details>
         </article>
 
         <aside class="revenue-diary">
@@ -241,13 +292,13 @@ onMounted(load)
             <strong class="metric-value">{{ formatCurrency(data?.revenue) }}</strong>
           </header>
           <LakeEmptyState
-            v-if="!data?.series.length"
+            v-if="!hasRevenueData"
             title="暂无营收数据"
             description="确认入账后，每日营收会显示在这里"
             compact
           />
           <div v-else class="revenue-list">
-            <div v-for="point in data.series" :key="point.statDate">
+            <div v-for="point in data?.series ?? []" :key="point.statDate">
               <span>{{ dateLabel(point.statDate) }}</span>
               <i aria-hidden="true" />
               <strong class="metric-value">{{ formatCurrency(point.revenue) }}</strong>
@@ -514,6 +565,31 @@ onMounted(load)
 .revenue-list strong {
   color: #263f35;
   font-size: 11px;
+}
+
+.data-table-details {
+  margin-top: 10px;
+  color: #56665f;
+  font-size: 11px;
+}
+
+.data-table-details summary {
+  cursor: pointer;
+  color: var(--lake-700);
+  font-weight: 700;
+}
+
+.data-table-details table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+}
+
+.data-table-details th,
+.data-table-details td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #e7dfd4;
+  text-align: left;
 }
 
 @media (max-width: 1040px) {

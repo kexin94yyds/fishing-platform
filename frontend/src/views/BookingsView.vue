@@ -8,6 +8,12 @@ import StatusTag from '@/components/StatusTag.vue'
 import { bookingApi, memberApi, spotApi } from '@/api'
 import { errorMessage } from '@/api/http'
 import { formatCurrency, formatDate, timeSlotLabel } from '@/utils/format'
+import {
+  businessDateValue,
+  calendarDateValue,
+  utcDateFromValue,
+  utcDateValue,
+} from '@/utils/businessTime'
 import type { Availability, Booking, Id, Member, Spot } from '@/types'
 
 const loading = ref(true)
@@ -23,9 +29,9 @@ const checkingAvailability = ref(false)
 const formRef = ref<FormInstance>()
 const formShellRef = ref<HTMLElement>()
 
-const today = new Date()
-const weekAnchor = ref(toDateValue(today))
-const mobileSelectedDate = ref(toDateValue(today))
+const todayValue = ref(businessDateValue())
+const weekAnchor = ref(todayValue.value)
+const mobileSelectedDate = ref(todayValue.value)
 const filters = reactive({
   status: '',
   keyword: '',
@@ -69,23 +75,28 @@ const rules: FormRules = {
 }
 
 const weekDates = computed(() => {
-  const anchor = new Date(`${weekAnchor.value}T00:00:00`)
-  const weekday = anchor.getDay() || 7
+  const anchor = utcDateFromValue(weekAnchor.value)
+  const weekday = anchor.getUTCDay() || 7
   const monday = new Date(anchor)
-  monday.setDate(anchor.getDate() - weekday + 1)
+  monday.setUTCDate(anchor.getUTCDate() - weekday + 1)
   const weekdayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
   return Array.from({ length: 7 }, (_, index) => {
     const date = new Date(monday)
-    date.setDate(monday.getDate() + index)
-    const value = toDateValue(date)
+    date.setUTCDate(monday.getUTCDate() + index)
+    const value = utcDateValue(date)
     return {
       value,
-      label: `${date.getMonth() + 1}/${date.getDate()}`,
+      label: `${date.getUTCMonth() + 1}/${date.getUTCDate()}`,
       weekday: weekdayLabels[index],
-      isToday: value === toDateValue(today),
+      isToday: value === todayValue.value,
+      isPast: value < todayValue.value,
     }
   })
 })
+
+const firstSchedulableDate = computed(
+  () => weekDates.value.find((day) => !day.isPast)?.value ?? todayValue.value,
+)
 
 const selectedMobileDay = computed(
   () =>
@@ -118,17 +129,8 @@ const availableSpots = computed(() => {
   return spots.value.filter((spot) => allowed.has(String(spot.id)))
 })
 
-function toDateValue(date: Date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 function disablePastDate(date: Date) {
-  const current = new Date()
-  current.setHours(0, 0, 0, 0)
-  return date.getTime() < current.getTime()
+  return calendarDateValue(date) < todayValue.value
 }
 
 function bookingsFor(date: string, slot: string) {
@@ -142,6 +144,7 @@ function dayTotal(date: string) {
 }
 
 async function load() {
+  todayValue.value = businessDateValue()
   loading.value = true
   error.value = ''
   if (!weekDates.value.some((day) => day.value === mobileSelectedDate.value)) {
@@ -158,7 +161,7 @@ async function load() {
       unique.set(String(booking.id), booking)
     })
     bookings.value = [...unique.values()]
-    members.value = memberResult.records
+    members.value = memberResult.records.filter((member) => member.status === 'ACTIVE')
     spots.value = spotResult.records.filter((spot) => spot.status === 'OPEN')
   } catch (reason) {
     error.value = errorMessage(reason)
@@ -173,6 +176,11 @@ function handleWeekChange(value: string | null) {
 }
 
 function openCreate(fishingDate = '', timeSlot = 'MORNING') {
+  todayValue.value = businessDateValue()
+  if (fishingDate && fishingDate < todayValue.value) {
+    ElMessage.warning('过去日期不能再安排预订')
+    return
+  }
   Object.assign(form, {
     memberId: '',
     spotId: '',
@@ -196,6 +204,12 @@ async function checkAvailability() {
     availabilityChecked.value = false
     return
   }
+  if (form.fishingDate < businessDateValue()) {
+    availability.value = []
+    availabilityChecked.value = false
+    ElMessage.warning('垂钓日期不能早于今天')
+    return
+  }
   checkingAvailability.value = true
   availabilityChecked.value = false
   try {
@@ -209,6 +223,16 @@ async function checkAvailability() {
     ElMessage.error(errorMessage(reason))
   } finally {
     checkingAvailability.value = false
+  }
+}
+
+function handleGuestsChange() {
+  if (
+    form.spotId &&
+    !availableSpots.value.some((spot) => String(spot.id) === String(form.spotId))
+  ) {
+    form.spotId = ''
+    ElMessage.warning('到场人数已超过原钓位余量，请重新选择钓位')
   }
 }
 
@@ -228,6 +252,15 @@ async function save() {
     await formRef.value.validate()
   } catch {
     await focusFirstInvalidField()
+    return
+  }
+  if (form.fishingDate < businessDateValue()) {
+    ElMessage.warning('垂钓日期不能早于今天')
+    return
+  }
+  if (!availableSpots.value.some((spot) => String(spot.id) === String(form.spotId))) {
+    form.spotId = ''
+    ElMessage.warning('所选钓位已不满足当前人数，请重新选择')
     return
   }
   saving.value = true
@@ -328,7 +361,7 @@ onMounted(load)
           <strong>本周暂无预约</strong>
           <span>下方 21 个时段空档均可直接安排。</span>
         </div>
-        <el-button type="primary" @click="openCreate(weekDates[0]?.value)">
+        <el-button type="primary" @click="openCreate(firstSchedulableDate)">
           安排第一笔
         </el-button>
       </div>
@@ -404,6 +437,7 @@ onMounted(load)
                   priority: day.isToday,
                 }"
                 :aria-label="`安排${day.weekday}${day.label}${slot.label}预订`"
+                :disabled="day.isPast"
                 @click="openCreate(day.value, slot.value)"
               >
                 <span class="empty-slot__plus" aria-hidden="true">＋</span>
@@ -497,6 +531,7 @@ onMounted(load)
               class="empty-slot"
               :class="{ compact: bookingsFor(mobileSelectedDate, slot.value).length }"
               :aria-label="`安排${selectedMobileDay?.weekday ?? ''}${selectedMobileDay?.label ?? ''}${slot.label}预订`"
+              :disabled="mobileSelectedDate < todayValue"
               @click="openCreate(mobileSelectedDate, slot.value)"
             >
               {{
@@ -538,7 +573,12 @@ onMounted(load)
               </el-select>
             </el-form-item>
             <el-form-item label="到场人数" prop="guests">
-              <el-input-number v-model="form.guests" :min="1" controls-position="right" />
+              <el-input-number
+                v-model="form.guests"
+                :min="1"
+                controls-position="right"
+                @change="handleGuestsChange"
+              />
             </el-form-item>
             <el-form-item label="垂钓日期" prop="fishingDate">
               <el-date-picker

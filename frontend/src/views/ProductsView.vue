@@ -7,7 +7,7 @@ import LakeEmptyState from '@/components/LakeEmptyState.vue'
 import ResourceState from '@/components/ResourceState.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { memberApi, productApi, saleOrderApi } from '@/api'
-import { errorMessage } from '@/api/http'
+import { ApiError, errorMessage } from '@/api/http'
 import { formatCurrency, formatDateTime } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import type { Id, Member, Product, SaleOrder } from '@/types'
@@ -35,6 +35,7 @@ type ProductForm = {
   price: number
   stockQuantity: number
   status: string
+  version?: number
 }
 
 type SaleLine = {
@@ -146,6 +147,7 @@ function openProduct(product?: Product) {
     price: product?.price ?? 0,
     stockQuantity: product?.stockQuantity ?? 0,
     status: product?.status ?? 'ACTIVE',
+    version: product?.version,
   })
   productFormRef.value?.clearValidate()
   productDialogOpen.value = true
@@ -196,13 +198,27 @@ async function saveProduct() {
       stockQuantity: productForm.stockQuantity,
       status: productForm.status,
     }
-    if (productForm.id !== undefined) await productApi.update(productForm.id, payload)
+    if (productForm.id !== undefined) {
+      await productApi.update(productForm.id, {
+        ...payload,
+        version: productForm.version ?? 0,
+      })
+    }
     else await productApi.create(payload)
     ElMessage.success(productForm.id !== undefined ? '商品已更新' : '商品已创建')
     productDialogOpen.value = false
     await load()
   } catch (reason) {
     ElMessage.error(errorMessage(reason))
+    if (
+      productForm.id !== undefined &&
+      reason instanceof ApiError &&
+      reason.status === 409 &&
+      /刷新|发生变化/.test(reason.message)
+    ) {
+      productDialogOpen.value = false
+      await load()
+    }
   } finally {
     saving.value = false
   }
@@ -389,7 +405,7 @@ onMounted(load)
                     style="width: 100%"
                   >
                     <el-option
-                      v-for="member in members"
+                      v-for="member in members.filter((item) => item.status === 'ACTIVE')"
                       :key="member.id"
                       :label="`${member.name} ${member.phone}`"
                       :value="member.id"

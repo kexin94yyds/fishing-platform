@@ -117,6 +117,7 @@ export interface Product {
   price: number
   stockQuantity: number
   status: string
+  version: number
   createdAt?: string
   updatedAt?: string
 }
@@ -203,7 +204,7 @@ export interface TrafficAnalytics {
   days: number
   series: TrafficPoint[]
   totalVisitors: number | null
-  uniqueVisitors: number | null
+  peakDailyUniqueVisitors: number | null
   newMembers: number | null
   bookingCount: number | null
   revenue: number | null

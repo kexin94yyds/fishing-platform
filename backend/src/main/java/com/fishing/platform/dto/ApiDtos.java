@@ -3,7 +3,7 @@ package com.fishing.platform.dto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
-import jakarta.validation.constraints.FutureOrPresent;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -72,12 +72,16 @@ public final class ApiDtos {
                     message = "必须是 OPEN、CLOSED 或 MAINTENANCE") String status,
             @Size(max = 500) String note
     ) {
+        @AssertTrue(message = "地图坐标必须同时填写或同时留空")
+        public boolean isCoordinatePairValid() {
+            return (mapX == null) == (mapY == null);
+        }
     }
 
     public record BookingRequest(
             Long memberId,
             @NotNull Long spotId,
-            @NotNull @FutureOrPresent LocalDate fishingDate,
+            @NotNull LocalDate fishingDate,
             @NotBlank @Pattern(regexp = "MORNING|AFTERNOON|EVENING",
                     message = "必须是 MORNING、AFTERNOON 或 EVENING") String timeSlot,
             @NotNull @Min(1) Integer guests,
@@ -120,6 +124,17 @@ public final class ApiDtos {
             @NotNull @DecimalMin(value = "0.00") @Digits(integer = 10, fraction = 2) BigDecimal price,
             @NotNull @Min(0) Integer stockQuantity,
             @Pattern(regexp = "ACTIVE|INACTIVE", message = "必须是 ACTIVE 或 INACTIVE") String status
+    ) {
+    }
+
+    public record ProductUpdateRequest(
+            @NotBlank @Size(max = 40) String sku,
+            @NotBlank @Size(max = 120) String name,
+            @NotBlank @Size(max = 60) String category,
+            @NotNull @DecimalMin(value = "0.00") @Digits(integer = 10, fraction = 2) BigDecimal price,
+            @NotNull @Min(0) Integer stockQuantity,
+            @Pattern(regexp = "ACTIVE|INACTIVE", message = "必须是 ACTIVE 或 INACTIVE") String status,
+            @NotNull @Min(0) Long version
     ) {
     }
 

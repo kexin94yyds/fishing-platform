@@ -2,6 +2,7 @@ package com.fishing.platform.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fishing.platform.common.ApiResponse;
+import com.fishing.platform.mapper.UserMapper;
 import com.fishing.platform.service.DatabaseUserDetailsService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
@@ -24,6 +25,7 @@ import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy;
 import org.springframework.security.web.authentication.session.CompositeSessionAuthenticationStrategy;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.csrf.CsrfAuthenticationStrategy;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
@@ -77,7 +79,11 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(HttpSecurity http,
                                             ObjectMapper objectMapper,
                                             SecurityContextRepository securityContextRepository,
-                                            CookieCsrfTokenRepository csrfTokenRepository) throws Exception {
+                                            SecurityContextHolderStrategy contextHolderStrategy,
+                                            CookieCsrfTokenRepository csrfTokenRepository,
+                                            UserMapper userMapper) throws Exception {
+        var accountStateFilter = new AccountStateFilter(
+                userMapper, objectMapper, securityContextRepository, contextHolderStrategy);
         http
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf
@@ -104,8 +110,11 @@ public class SecurityConfig {
                                 "/api/zones/**",
                                 "/api/spots/**",
                                 "/api/products/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/payments/*/confirm").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/payments/*/confirm",
+                                "/api/sales-orders/*/cancel").hasRole("ADMIN")
                         .anyRequest().authenticated())
+                .addFilterBefore(accountStateFilter, AuthorizationFilter.class)
                 .requestCache(cache -> cache.disable())
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())

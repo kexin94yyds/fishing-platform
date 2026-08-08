@@ -24,6 +24,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const mobileMenuOpen = ref(false)
 const quickNavigatorOpen = ref(false)
+const loggingOut = ref(false)
 const todayLabel = new Intl.DateTimeFormat('zh-CN', {
   month: 'long',
   day: 'numeric',
@@ -60,18 +61,26 @@ function focusPageHeading() {
 }
 
 async function handleLogout() {
+  if (loggingOut.value) return
   try {
     await ElMessageBox.confirm('确认退出当前运营账号吗？', '退出登录', {
       confirmButtonText: '确认退出',
       cancelButtonText: '继续工作',
       type: 'warning',
     })
+    loggingOut.value = true
     await auth.logout()
     await router.replace('/login')
   } catch (error) {
     if (error !== 'cancel' && error !== 'close') {
-      ElMessage.error(error instanceof Error ? error.message : '退出失败')
+      ElMessage.error(
+        error instanceof Error
+          ? `退出未确认，当前登录状态已保留：${error.message}`
+          : '退出未确认，当前登录状态已保留，请重试',
+      )
     }
+  } finally {
+    loggingOut.value = false
   }
 }
 </script>
@@ -173,7 +182,15 @@ async function handleLogout() {
             <span>{{ roleLabel }}</span>
           </div>
           <el-tooltip content="退出登录" placement="bottom">
-            <el-button :icon="SwitchButton" circle plain aria-label="退出登录" @click="handleLogout" />
+            <el-button
+              :icon="SwitchButton"
+              :loading="loggingOut"
+              :disabled="loggingOut"
+              circle
+              plain
+              aria-label="退出登录"
+              @click="handleLogout"
+            />
           </el-tooltip>
         </div>
       </header>

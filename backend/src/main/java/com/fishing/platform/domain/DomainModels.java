@@ -121,6 +121,7 @@ public final class DomainModels {
             BigDecimal price,
             Integer stockQuantity,
             String status,
+            Long version,
             LocalDateTime createdAt,
             LocalDateTime updatedAt
     ) {

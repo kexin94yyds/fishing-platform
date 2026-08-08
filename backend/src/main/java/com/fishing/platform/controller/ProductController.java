@@ -3,6 +3,7 @@ package com.fishing.platform.controller;
 import com.fishing.platform.common.ApiResponse;
 import com.fishing.platform.domain.DomainModels.Product;
 import com.fishing.platform.dto.ApiDtos.ProductRequest;
+import com.fishing.platform.dto.ApiDtos.ProductUpdateRequest;
 import com.fishing.platform.service.ProductService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
@@ -47,7 +48,7 @@ public class ProductController {
 
     @PutMapping("/{id}")
     public ApiResponse<Product> update(@PathVariable @Positive Long id,
-                                       @Valid @RequestBody ProductRequest request) {
+                                       @Valid @RequestBody ProductUpdateRequest request) {
         return ApiResponse.ok("商品已更新", service.update(id, request));
     }
 }
