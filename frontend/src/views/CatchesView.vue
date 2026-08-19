@@ -11,7 +11,15 @@ import { errorMessage } from '@/api/http'
 import { formatDate, formatNumber } from '@/utils/format'
 import { focusFirstInvalid } from '@/utils/forms'
 import { businessDateValue, calendarDateValue } from '@/utils/businessTime'
-import type { Booking, CatchRecord, Id, Member, Spot } from '@/types'
+import type {
+  Booking,
+  CatchCreatePayload,
+  CatchRecord,
+  CatchUpdatePayload,
+  Id,
+  Member,
+  Spot,
+} from '@/types'
 
 const loading = ref(true)
 const error = ref('')
@@ -97,6 +105,8 @@ const totalWeight = computed(() =>
 
 const bookingLinked = computed(() => form.bookingId !== '')
 const todayValue = ref(businessDateValue())
+const originalStatus = ref<string | null>(null)
+const originalVersion = ref<number | null>(null)
 const originalAssociation = ref<{
   bookingId: Id | ''
   memberId: Id | ''
@@ -104,9 +114,26 @@ const originalAssociation = ref<{
   fishingDate: string
 } | null>(null)
 const voidAssociationLocked = computed(
-  () => form.id !== undefined && form.status === 'VOID',
+  () => form.id !== undefined && (form.status === 'VOID' || originalStatus.value === 'VOID'),
 )
 const associationLocked = computed(() => bookingLinked.value || voidAssociationLocked.value)
+const activeMembers = computed(() => members.value.filter((member) => member.status === 'ACTIVE'))
+const openSpots = computed(() => spots.value.filter((spot) => spot.status === 'OPEN'))
+const statusOptions = computed(() => {
+  if (form.id === undefined) return [{ label: '已登记', value: 'RECORDED' }]
+  if (originalStatus.value === 'VOID') return [{ label: '已作废', value: 'VOID' }]
+  if (originalStatus.value === 'VERIFIED') {
+    return [
+      { label: '已核验', value: 'VERIFIED' },
+      { label: '已作废', value: 'VOID' },
+    ]
+  }
+  return [
+    { label: '已登记', value: 'RECORDED' },
+    { label: '已核验', value: 'VERIFIED' },
+    { label: '已作废', value: 'VOID' },
+  ]
+})
 const eligibleBookings = computed(() =>
   bookings.value.filter(isBookingEligible),
 )
@@ -165,6 +192,8 @@ async function load() {
 
 function openForm(record?: CatchRecord) {
   todayValue.value = businessDateValue()
+  originalStatus.value = record?.status ?? null
+  originalVersion.value = record?.version ?? null
   const linkedBooking = record?.bookingId
     ? bookings.value.find((booking) => String(booking.id) === String(record.bookingId))
     : undefined
@@ -230,7 +259,7 @@ async function save() {
   }
   saving.value = true
   try {
-    const payload = {
+    const payload: CatchCreatePayload = {
       bookingId: form.bookingId || undefined,
       memberId: form.memberId || undefined,
       spotId: form.spotId,
@@ -238,11 +267,16 @@ async function save() {
       weight: form.weight,
       quantity: form.quantity,
       fishingDate: form.fishingDate,
-      status: form.status,
       notes: form.notes,
     }
-    if (form.id !== undefined) await catchApi.update(form.id, payload)
-    else await catchApi.create(payload)
+    if (form.id !== undefined) {
+      await catchApi.update(form.id, {
+        ...payload,
+        status: form.status as CatchUpdatePayload['status'],
+        expectedStatus: originalStatus.value as CatchUpdatePayload['expectedStatus'],
+        expectedVersion: originalVersion.value as number,
+      })
+    } else await catchApi.create(payload)
     ElMessage.success(form.id !== undefined ? '渔获档案已更新' : '渔获档案已创建')
     dialogOpen.value = false
     await load()
@@ -436,7 +470,7 @@ onMounted(load)
               style="width: 100%"
             >
               <el-option
-                v-for="member in members"
+                v-for="member in activeMembers"
                 :key="member.id"
                 :label="`${member.name} ${member.phone}`"
                 :value="member.id"
@@ -452,7 +486,7 @@ onMounted(load)
               style="width: 100%"
             >
               <el-option
-                v-for="spot in spots"
+                v-for="spot in openSpots"
                 :key="spot.id"
                 :label="spot.name || spot.code"
                 :value="spot.id"
@@ -475,10 +509,18 @@ onMounted(load)
             <el-input v-model.trim="form.species" name="species" placeholder="例如 鲫鱼…" />
           </el-form-item>
           <el-form-item label="档案状态">
-            <el-select v-model="form.status" aria-label="档案状态" style="width: 100%">
-              <el-option label="已登记" value="RECORDED" />
-              <el-option label="已核验" value="VERIFIED" />
-              <el-option label="已作废" value="VOID" />
+            <el-select
+              v-model="form.status"
+              :disabled="form.id === undefined || originalStatus === 'VOID'"
+              aria-label="档案状态"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="option in statusOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
             </el-select>
           </el-form-item>
           <el-form-item label="重量（kg）" prop="weight">

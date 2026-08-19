@@ -61,6 +61,11 @@ export const useAuthStore = defineStore('auth', () => {
     clearSession()
   }
 
+  async function refreshUser() {
+    user.value = await authApi.me()
+    initialized.value = true
+  }
+
   function clearSession() {
     user.value = null
     initialized.value = true
@@ -79,6 +84,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     register,
     logout,
+    refreshUser,
     clearSession,
   }
 })

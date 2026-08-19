@@ -3,6 +3,7 @@ package com.fishing.platform.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fishing.platform.common.ApiResponse;
 import com.fishing.platform.mapper.UserMapper;
+import com.fishing.platform.security.DatabaseUserPrincipal;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +22,13 @@ import java.io.IOException;
 import java.util.List;
 
 public class AccountStateFilter extends OncePerRequestFilter {
+    private static final List<String> PUBLIC_PATHS = List.of(
+            "/api/auth/csrf",
+            "/api/auth/login",
+            "/api/auth/register",
+            "/api/auth/registration",
+            "/error"
+    );
     private final UserMapper userMapper;
     private final ObjectMapper objectMapper;
     private final SecurityContextRepository securityContextRepository;
@@ -48,12 +56,20 @@ public class AccountStateFilter extends OncePerRequestFilter {
         }
 
         var account = userMapper.findByUsername(authentication.getName());
-        if (account == null || !account.enabled()
+        boolean sessionVersionIsCurrent = account != null
+                && authentication.getPrincipal() instanceof DatabaseUserPrincipal principal
+                && principal.sessionVersion() == account.sessionVersion();
+        if (account == null || !account.enabled() || !sessionVersionIsCurrent
                 || !("ADMIN".equals(account.role()) || "OPERATOR".equals(account.role()))) {
             contextHolderStrategy.clearContext();
             HttpSession session = request.getSession(false);
             if (session != null) {
                 session.invalidate();
+            }
+            String requestPath = request.getRequestURI().substring(request.getContextPath().length());
+            if (PUBLIC_PATHS.contains(requestPath)) {
+                filterChain.doFilter(request, response);
+                return;
             }
             writeUnauthorized(response);
             return;
@@ -65,7 +81,7 @@ public class AccountStateFilter extends OncePerRequestFilter {
                 .anyMatch(authority -> currentRole.equals(authority.getAuthority()));
         if (!roleIsCurrent) {
             var refreshed = UsernamePasswordAuthenticationToken.authenticated(
-                    authentication.getPrincipal(), null, List.of(new SimpleGrantedAuthority(currentRole)));
+                    DatabaseUserPrincipal.from(account), null, List.of(new SimpleGrantedAuthority(currentRole)));
             refreshed.setDetails(authentication.getDetails());
             var context = contextHolderStrategy.createEmptyContext();
             context.setAuthentication(refreshed);

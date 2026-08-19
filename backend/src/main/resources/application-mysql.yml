@@ -1,6 +1,9 @@
 spring:
   flyway:
-    locations: classpath:db/migration,classpath:db/mysql-migration
+    locations: classpath:db/schema,classpath:db/mysql
+    ignore-migration-patterns:
+      - versioned:missing
+      - '*:future'
   datasource:
     url: ${FISHING_DB_URL}
     username: ${FISHING_DB_USERNAME}

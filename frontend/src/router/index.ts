@@ -69,6 +69,12 @@ const router = createRouter({
           component: () => import('@/views/TrafficView.vue'),
           meta: { title: '客流分析', subtitle: '查看客流趋势、时段与来源构成' },
         },
+        {
+          path: 'accounts',
+          name: 'accounts',
+          component: () => import('@/views/AccountsView.vue'),
+          meta: { title: '账号管理', subtitle: '维护运营账号、角色和会话状态', requiresAdmin: true },
+        },
       ],
     },
     {
@@ -95,6 +101,9 @@ router.beforeEach(async (to) => {
 
   if (!auth.isAuthenticated) {
     return { name: 'login', query: { redirect: to.fullPath } }
+  }
+  if (to.meta.requiresAdmin && !auth.isAdmin) {
+    return { name: 'dashboard' }
   }
   return true
 })

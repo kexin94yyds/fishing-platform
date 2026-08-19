@@ -29,6 +29,16 @@ public interface SpotMapper {
     @Select("SELECT id FROM fishing_spot WHERE id = #{id} FOR UPDATE")
     Long lockById(@Param("id") Long id);
 
+    @Select("""
+            SELECT COUNT(*) > 0
+            FROM booking
+            WHERE spot_id = #{spotId}
+              AND fishing_date > #{fromDate}
+              AND status = 'CONFIRMED'
+            """)
+    boolean hasFutureConfirmedBooking(@Param("spotId") Long spotId,
+                                      @Param("fromDate") LocalDate fromDate);
+
     @Select(BASE_SELECT + " WHERE s.code = #{code}")
     Spot findByCode(@Param("code") String code);
 

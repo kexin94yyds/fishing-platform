@@ -2,8 +2,12 @@ import { request } from './http'
 import { toCurrentUser, toDashboard, toPage, toTraffic } from './adapters'
 import type {
   Availability,
+  Account,
+  AccountAudit,
   Booking,
+  CatchCreatePayload,
   CatchRecord,
+  CatchUpdatePayload,
   DashboardSummary,
   Id,
   Member,
@@ -14,8 +18,11 @@ import type {
   SaleCreatePayload,
   SaleCreateResult,
   SaleOrder,
+  SaleOrderDetail,
   Spot,
   TrafficAnalytics,
+  TrafficDailyEntry,
+  TrafficDailyUpsertPayload,
   Zone,
 } from '@/types'
 
@@ -45,6 +52,25 @@ export const authApi = {
   },
   me: () => request<unknown>({ url: '/auth/me', method: 'GET' }).then(toCurrentUser),
   logout: () => request<void>({ url: '/auth/logout', method: 'POST' }),
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    request<void>({ url: '/auth/change-password', method: 'POST', data }),
+}
+
+export const accountApi = {
+  list: (): Promise<PageResult<Account>> =>
+    request<unknown>({ url: '/admin/accounts', method: 'GET' }).then((data) =>
+      toPage<Account>(data, ['accounts']),
+    ),
+  create: (data: { username: string; displayName: string; password: string; role: Account['role'] }) =>
+    request<Account>({ url: '/admin/accounts', method: 'POST', data }),
+  update: (id: Account['id'], data: Pick<Account, 'displayName' | 'role' | 'enabled'> & { expectedVersion: number }) =>
+    request<Account>({ url: `/admin/accounts/${id}`, method: 'PUT', data }),
+  resetPassword: (id: Account['id'], data: { newPassword: string; expectedVersion: number }) =>
+    request<Account>({ url: `/admin/accounts/${id}/reset-password`, method: 'POST', data }),
+  audits: (params?: { targetId?: Id; limit?: number }): Promise<PageResult<AccountAudit>> =>
+    request<unknown>({ url: '/admin/account-audits', method: 'GET', params }).then((data) =>
+      toPage<AccountAudit>(data, ['audits']),
+    ),
 }
 
 export const dashboardApi = {
@@ -92,6 +118,10 @@ export const bookingApi = {
   create: (data: Partial<Booking>) => request<Booking>({ url: '/bookings', method: 'POST', data }),
   cancel: (id: Booking['id']) =>
     request<Booking>({ url: `/bookings/${id}/cancel`, method: 'POST' }),
+  complete: (id: Booking['id']) =>
+    request<Booking>({ url: `/bookings/${id}/complete`, method: 'POST' }),
+  noShow: (id: Booking['id']) =>
+    request<Booking>({ url: `/bookings/${id}/no-show`, method: 'POST' }),
 }
 
 export const catchApi = {
@@ -99,8 +129,8 @@ export const catchApi = {
     request<unknown>({ url: '/catches', method: 'GET', params }).then((data) =>
       toPage<CatchRecord>(data, ['catches']),
     ),
-  create: (data: Partial<CatchRecord>) => request<CatchRecord>({ url: '/catches', method: 'POST', data }),
-  update: (id: CatchRecord['id'], data: Partial<CatchRecord>) =>
+  create: (data: CatchCreatePayload) => request<CatchRecord>({ url: '/catches', method: 'POST', data }),
+  update: (id: CatchRecord['id'], data: CatchUpdatePayload) =>
     request<CatchRecord>({ url: `/catches/${id}`, method: 'PUT', data }),
 }
 
@@ -131,6 +161,8 @@ export const saleOrderApi = {
     ),
   create: (data: SaleCreatePayload) =>
     request<SaleCreateResult>({ url: '/sales-orders', method: 'POST', data }),
+  detail: (id: SaleOrder['id']) =>
+    request<SaleOrderDetail>({ url: `/sales-orders/${id}`, method: 'GET' }),
   cancel: (id: SaleOrder['id']) =>
     request<SaleOrder>({ url: `/sales-orders/${id}/cancel`, method: 'POST' }),
 }
@@ -151,4 +183,11 @@ export const paymentApi = {
 export const analyticsApi = {
   traffic: (days = 7): Promise<TrafficAnalytics> =>
     request<unknown>({ url: '/analytics/traffic', method: 'GET', params: { days } }).then(toTraffic),
+}
+
+export const trafficDailyApi = {
+  list: (days = 30): Promise<TrafficDailyEntry[]> =>
+    request<TrafficDailyEntry[]>({ url: '/traffic-daily', method: 'GET', params: { days } }),
+  upsert: (statDate: string, data: TrafficDailyUpsertPayload): Promise<TrafficDailyEntry> =>
+    request<TrafficDailyEntry>({ url: `/traffic-daily/${statDate}`, method: 'PUT', data }),
 }

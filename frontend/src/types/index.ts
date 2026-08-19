@@ -19,6 +19,30 @@ export interface CurrentUser {
   role: string
 }
 
+export interface Account {
+  id: Id
+  username: string
+  displayName: string
+  role: 'ADMIN' | 'OPERATOR'
+  enabled: boolean
+  version: number
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface AccountAudit {
+  id: Id
+  actorUsername: string
+  targetUserId: Id
+  targetUsername: string
+  action: string
+  beforeRole?: string
+  afterRole?: string
+  beforeEnabled?: boolean
+  afterEnabled?: boolean
+  createdAt?: string
+}
+
 export interface RegistrationStatus {
   enabled: boolean
 }
@@ -92,9 +116,27 @@ export interface CatchRecord {
   quantity: number
   fishingDate: string
   status: string
+  version: number
   notes?: string
   createdAt?: string
   updatedAt?: string
+}
+
+export interface CatchCreatePayload {
+  bookingId?: Id
+  memberId?: Id
+  spotId: Id
+  species: string
+  weight: number
+  quantity: number
+  fishingDate: string
+  notes?: string
+}
+
+export interface CatchUpdatePayload extends CatchCreatePayload {
+  status: 'RECORDED' | 'VERIFIED' | 'VOID'
+  expectedStatus: 'RECORDED' | 'VERIFIED' | 'VOID'
+  expectedVersion: number
 }
 
 export interface Member {
@@ -157,6 +199,11 @@ export interface SaleCreateResult {
   items: SaleOrderItem[]
 }
 
+export interface SaleOrderDetail {
+  order: SaleOrder
+  items: SaleOrderItem[]
+}
+
 export interface Payment {
   id: Id
   paymentNo?: string
@@ -208,6 +255,28 @@ export interface TrafficAnalytics {
   newMembers: number | null
   bookingCount: number | null
   revenue: number | null
+}
+
+export interface TrafficDailyEntry {
+  id: Id
+  statDate: string
+  visits: number
+  uniqueVisitors: number
+  notes?: string | null
+  version: number
+  createdBy?: Id | null
+  createdByName?: string | null
+  updatedBy?: Id | null
+  updatedByName?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface TrafficDailyUpsertPayload {
+  visits: number
+  uniqueVisitors: number
+  notes?: string
+  expectedVersion?: number
 }
 
 export interface Availability {

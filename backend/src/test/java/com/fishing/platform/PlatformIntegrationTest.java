@@ -119,13 +119,14 @@ class PlatformIntegrationTest {
                 "notes", "集成测试"
         ));
 
-        mockMvc.perform(post("/api/bookings")
+        MvcResult created = mockMvc.perform(post("/api/bookings")
                         .session(session).cookie(csrf.cookie())
                         .header(csrf.headerName(), csrf.token())
                         .contentType(MediaType.APPLICATION_JSON).content(request))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.data.status", is("CONFIRMED")));
+                .andExpect(jsonPath("$.data.status", is("CONFIRMED")))
+                .andReturn();
 
         mockMvc.perform(post("/api/bookings")
                         .session(session).cookie(csrf.cookie())
@@ -134,6 +135,13 @@ class PlatformIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.data").value(nullValue()));
+
+        long bookingId = objectMapper.readTree(created.getResponse().getContentAsByteArray())
+                .at("/data/id").asLong();
+        mockMvc.perform(post("/api/bookings/{id}/cancel", bookingId)
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token()))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -185,6 +193,22 @@ class PlatformIntegrationTest {
                 .andReturn();
         long paymentId = objectMapper.readTree(created.getResponse().getContentAsByteArray())
                 .at("/data/payment/id").asLong();
+        long orderId = objectMapper.readTree(created.getResponse().getContentAsByteArray())
+                .at("/data/order/id").asLong();
+
+        mockMvc.perform(get("/api/sales-orders/{id}", orderId).session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.order.id", is((int) orderId)))
+                .andExpect(jsonPath("$.data.items.length()", is(1)))
+                .andExpect(jsonPath("$.data.items[0].productId", is(3)))
+                .andExpect(jsonPath("$.data.items[0].productName", is("瓶装饮用水")))
+                .andExpect(jsonPath("$.data.items[0].quantity", is(2)))
+                .andExpect(jsonPath("$.data.items[0].unitPrice", is(3.00)))
+                .andExpect(jsonPath("$.data.items[0].lineAmount", is(6.00)));
+
+        mockMvc.perform(get("/api/sales-orders/{id}", 999999).session(session))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message", is("销售单不存在")));
 
         CsrfCredentials refreshedCsrf = csrf(session);
         mockMvc.perform(post("/api/payments/{id}/confirm", paymentId)
@@ -478,9 +502,10 @@ class PlatformIntegrationTest {
         MockHttpSession session = authenticatedSession();
         CsrfCredentials csrf = csrf(session);
         String today = LocalDate.now(businessClock).toString();
+        String cancellableFutureDate = LocalDate.now(businessClock).plusDays(1).toString();
         String bookingRequest = objectMapper.writeValueAsString(Map.of(
                 "spotId", 4,
-                "fishingDate", today,
+                "fishingDate", cancellableFutureDate,
                 "timeSlot", "EVENING",
                 "guests", 1
         ));
@@ -501,11 +526,13 @@ class PlatformIntegrationTest {
         String cancelledCatch = objectMapper.writeValueAsString(Map.of(
                 "bookingId", cancelledBookingId,
                 "spotId", 4,
-                "fishingDate", today,
+                "fishingDate", cancellableFutureDate,
                 "species", "鲫鱼",
                 "weight", 1.25,
                 "quantity", 1,
-                "status", "RECORDED"
+                "status", "RECORDED",
+                "expectedStatus", "RECORDED",
+                "expectedVersion", 0
         ));
         mockMvc.perform(post("/api/catches")
                         .session(session).cookie(csrf.cookie())
@@ -588,7 +615,7 @@ class PlatformIntegrationTest {
 
     @Test
     @Order(13)
-    void bookingWithActiveCatchCannotBeCancelled() throws Exception {
+    void bookingWithActiveCatchCannotBeMarkedNoShow() throws Exception {
         MockHttpSession session = authenticatedSession();
         CsrfCredentials csrf = csrf(session);
         String today = LocalDate.now(businessClock).toString();
@@ -622,16 +649,16 @@ class PlatformIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content(catchRequest))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(post("/api/bookings/{id}/cancel", bookingId)
+        mockMvc.perform(post("/api/bookings/{id}/no-show", bookingId)
                         .session(session).cookie(csrf.cookie())
                         .header(csrf.headerName(), csrf.token()))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message", is("该预订已有有效渔获记录，不能取消")));
+                .andExpect(jsonPath("$.message", is("该预订已有有效渔获记录，只能完成结单，不能标记爽约")));
     }
 
     @Test
     @Order(14)
-    void concurrentCancellationAndCatchCreationPreserveBookingInvariant() throws Exception {
+    void concurrentNoShowAndCatchCreationPreserveBookingInvariant() throws Exception {
         MockHttpSession setupSession = authenticatedSession();
         CsrfCredentials setupCsrf = csrf(setupSession);
         String today = LocalDate.now(businessClock).toString();
@@ -666,9 +693,9 @@ class PlatformIntegrationTest {
         CountDownLatch start = new CountDownLatch(1);
         var executor = Executors.newFixedThreadPool(2);
         try {
-            var cancellation = executor.submit(() -> {
+            var noShow = executor.submit(() -> {
                 start.await();
-                return mockMvc.perform(post("/api/bookings/{id}/cancel", bookingId)
+                return mockMvc.perform(post("/api/bookings/{id}/no-show", bookingId)
                                 .session(cancelSession).cookie(cancelCsrf.cookie())
                                 .header(cancelCsrf.headerName(), cancelCsrf.token()))
                         .andReturn().getResponse().getStatus();
@@ -683,11 +710,11 @@ class PlatformIntegrationTest {
             });
             start.countDown();
             List<Integer> statuses = List.of(
-                    cancellation.get(10, TimeUnit.SECONDS),
+                    noShow.get(10, TimeUnit.SECONDS),
                     catchCreation.get(10, TimeUnit.SECONDS)
             ).stream().sorted().toList();
             assertTrue(statuses.equals(List.of(200, 409)) || statuses.equals(List.of(201, 409)),
-                    "取消与登记只能有一个成功，实际状态：" + statuses);
+                    "爽约结单与登记只能有一个成功，实际状态：" + statuses);
         } finally {
             executor.shutdownNow();
         }

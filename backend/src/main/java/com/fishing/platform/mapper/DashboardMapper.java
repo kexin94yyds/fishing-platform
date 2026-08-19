@@ -20,7 +20,11 @@ public interface DashboardMapper {
             """)
     long openSpots();
 
-    @Select("SELECT COUNT(*) FROM booking WHERE fishing_date = #{today} AND status != 'CANCELLED'")
+    @Select("""
+            SELECT COUNT(*) FROM booking
+            WHERE fishing_date = #{today}
+              AND status IN ('CONFIRMED', 'COMPLETED')
+            """)
     long todayBookings(@Param("today") LocalDate today);
 
     @Select("SELECT COUNT(*) FROM member WHERE status = 'ACTIVE'")
