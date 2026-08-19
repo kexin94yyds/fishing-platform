@@ -14,7 +14,7 @@ import {
   formatDateTime,
   paymentMethodLabel,
 } from '@/utils/format'
-import type { Payment, SaleOrder } from '@/types'
+import type { Payment, SaleOrder, SaleOrderDetail } from '@/types'
 
 const auth = useAuthStore()
 const canConfirmPayments = computed(() => auth.isAdmin)
@@ -26,6 +26,10 @@ const keyword = ref('')
 const statusFilter = ref('')
 const confirmingId = ref<Payment['id'] | null>(null)
 const cancellingId = ref<Payment['id'] | null>(null)
+const detailLoadingId = ref<SaleOrder['id'] | null>(null)
+const detailDialogOpen = ref(false)
+const selectedOrderDetail = ref<SaleOrderDetail | null>(null)
+let detailRequestSequence = 0
 const confirmDialogOpen = ref(false)
 const selectedPayment = ref<Payment | null>(null)
 const paymentMethod = ref('CASH')
@@ -118,6 +122,21 @@ async function cancelSale(payment: Payment) {
     if (reason !== 'cancel' && reason !== 'close') ElMessage.error(errorMessage(reason))
   } finally {
     cancellingId.value = null
+  }
+}
+
+async function openOrderDetail(order: SaleOrder) {
+  const requestSequence = ++detailRequestSequence
+  detailLoadingId.value = order.id
+  try {
+    const detail = await saleOrderApi.detail(order.id)
+    if (requestSequence !== detailRequestSequence) return
+    selectedOrderDetail.value = detail
+    detailDialogOpen.value = true
+  } catch (reason) {
+    if (requestSequence === detailRequestSequence) ElMessage.error(errorMessage(reason))
+  } finally {
+    if (requestSequence === detailRequestSequence) detailLoadingId.value = null
   }
 }
 
@@ -332,6 +351,15 @@ onMounted(load)
             <div class="order-stub__status">
               <StatusTag :status="order.paymentStatus" />
               <small>{{ formatDateTime(order.createdAt) }}</small>
+              <el-button
+                link
+                type="primary"
+                :loading="detailLoadingId === order.id"
+                :aria-label="`查看销售单 ${order.orderNo || order.id} 商品明细`"
+                @click="openOrderDetail(order)"
+              >
+                查看商品明细
+              </el-button>
             </div>
           </article>
         </div>
@@ -377,6 +405,43 @@ onMounted(load)
         >
           核实到账
         </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="detailDialogOpen"
+      title="销售商品明细"
+      width="620px"
+      destroy-on-close
+    >
+      <div v-if="selectedOrderDetail" class="order-detail">
+        <header>
+          <div>
+            <small>销售单</small>
+            <strong>{{ selectedOrderDetail.order.orderNo || selectedOrderDetail.order.id }}</strong>
+          </div>
+          <div>
+            <small>客户</small>
+            <strong>{{ selectedOrderDetail.order.memberName || '散客' }}</strong>
+          </div>
+          <div>
+            <small>合计</small>
+            <strong class="metric-value">{{ formatCurrency(selectedOrderDetail.order.totalAmount) }}</strong>
+          </div>
+        </header>
+        <el-table :data="selectedOrderDetail.items" stripe>
+          <el-table-column prop="productName" label="商品" min-width="170" />
+          <el-table-column prop="quantity" label="数量" width="80" align="right" />
+          <el-table-column label="单价" width="120" align="right">
+            <template #default="scope">{{ formatCurrency(scope.row.unitPrice) }}</template>
+          </el-table-column>
+          <el-table-column label="小计" width="120" align="right">
+            <template #default="scope">{{ formatCurrency(scope.row.lineAmount) }}</template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <template #footer>
+        <el-button @click="detailDialogOpen = false">关闭</el-button>
       </template>
     </el-dialog>
   </div>
@@ -704,8 +769,38 @@ onMounted(load)
   border-top: 1px dashed #ddd3c4;
 }
 
+.order-stub__status .el-button {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 0;
+}
+
 .order-stub__status small {
   text-align: right;
+}
+
+.order-detail {
+  display: grid;
+  gap: 18px;
+}
+
+.order-detail > header {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 14px;
+  padding: 14px 16px;
+  border-left: 4px solid var(--clay-600);
+  background: #f5eee3;
+}
+
+.order-detail > header > div {
+  display: grid;
+  gap: 4px;
+}
+
+.order-detail small {
+  color: #7d8881;
+  font-size: 11px;
 }
 
 .confirm-payment {

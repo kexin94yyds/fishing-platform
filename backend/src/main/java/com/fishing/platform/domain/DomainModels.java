@@ -14,7 +14,42 @@ public final class DomainModels {
             String passwordHash,
             String displayName,
             String role,
-            boolean enabled
+            boolean enabled,
+            Long version,
+            Long sessionVersion,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt
+    ) {
+    }
+
+    public record AccountView(
+            Long id,
+            String username,
+            String displayName,
+            String role,
+            boolean enabled,
+            Long version,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt
+    ) {
+        public static AccountView from(UserAccount account) {
+            return new AccountView(account.id(), account.username(), account.displayName(), account.role(),
+                    account.enabled(), account.version(), account.createdAt(), account.updatedAt());
+        }
+    }
+
+    public record AccountAudit(
+            Long id,
+            Long actorUserId,
+            String actorUsername,
+            Long targetUserId,
+            String targetUsername,
+            String action,
+            String beforeRole,
+            String afterRole,
+            Boolean beforeEnabled,
+            Boolean afterEnabled,
+            LocalDateTime createdAt
     ) {
     }
 
@@ -95,6 +130,7 @@ public final class DomainModels {
             Integer quantity,
             String notes,
             String status,
+            Long version,
             LocalDateTime createdAt,
             LocalDateTime updatedAt
     ) {
@@ -151,6 +187,12 @@ public final class DomainModels {
     ) {
     }
 
+    public record SalesOrderDetail(
+            SalesOrder order,
+            java.util.List<SalesOrderItem> items
+    ) {
+    }
+
     public record Payment(
             Long id,
             String paymentNo,
@@ -173,6 +215,22 @@ public final class DomainModels {
             Integer newMembers,
             Integer bookingCount,
             BigDecimal revenue
+    ) {
+    }
+
+    public record TrafficDailyEntry(
+            Long id,
+            LocalDate statDate,
+            Integer visits,
+            Integer uniqueVisitors,
+            String notes,
+            Long version,
+            Long createdBy,
+            String createdByName,
+            Long updatedBy,
+            String updatedByName,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt
     ) {
     }
 

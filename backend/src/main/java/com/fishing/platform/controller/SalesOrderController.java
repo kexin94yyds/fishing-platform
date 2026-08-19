@@ -2,6 +2,7 @@ package com.fishing.platform.controller;
 
 import com.fishing.platform.common.ApiResponse;
 import com.fishing.platform.domain.DomainModels.SalesOrder;
+import com.fishing.platform.domain.DomainModels.SalesOrderDetail;
 import com.fishing.platform.dto.ApiDtos.SalesOrderRequest;
 import com.fishing.platform.service.SalesService;
 import jakarta.validation.Valid;
@@ -32,6 +33,11 @@ public class SalesOrderController {
     @GetMapping
     public ApiResponse<List<SalesOrder>> list() {
         return ApiResponse.ok(service.findAll());
+    }
+
+    @GetMapping("/{id}")
+    public ApiResponse<SalesOrderDetail> detail(@PathVariable @Positive Long id) {
+        return ApiResponse.ok(service.findDetail(id));
     }
 
     @PostMapping

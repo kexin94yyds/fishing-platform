@@ -32,7 +32,8 @@ public interface AnalyticsMapper {
     @Select("""
             SELECT fishing_date AS stat_date, COUNT(*) AS metric_value
             FROM booking
-            WHERE fishing_date >= #{startDate} AND status != 'CANCELLED'
+            WHERE fishing_date >= #{startDate}
+              AND status IN ('CONFIRMED', 'COMPLETED')
             GROUP BY fishing_date
             ORDER BY stat_date
             """)

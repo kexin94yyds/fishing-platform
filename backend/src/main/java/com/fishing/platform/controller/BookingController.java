@@ -61,4 +61,14 @@ public class BookingController {
     public ApiResponse<Booking> cancel(@PathVariable @Positive Long id) {
         return ApiResponse.ok("预订已取消", service.cancel(id));
     }
+
+    @PostMapping("/{id}/complete")
+    public ApiResponse<Booking> complete(@PathVariable @Positive Long id) {
+        return ApiResponse.ok("预订已完成结单", service.complete(id));
+    }
+
+    @PostMapping("/{id}/no-show")
+    public ApiResponse<Booking> noShow(@PathVariable @Positive Long id) {
+        return ApiResponse.ok("预订已标记爽约", service.noShow(id));
+    }
 }

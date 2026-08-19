@@ -4,6 +4,7 @@ import com.fishing.platform.common.BusinessException;
 import com.fishing.platform.common.NotFoundException;
 import com.fishing.platform.domain.DomainModels.Product;
 import com.fishing.platform.domain.DomainModels.SalesOrder;
+import com.fishing.platform.domain.DomainModels.SalesOrderDetail;
 import com.fishing.platform.dto.ApiDtos.SalesOrderRequest;
 import com.fishing.platform.mapper.MemberMapper;
 import com.fishing.platform.mapper.PaymentMapper;
@@ -41,6 +42,14 @@ public class SalesService {
 
     public List<SalesOrder> findAll() {
         return salesMapper.findAll();
+    }
+
+    public SalesOrderDetail findDetail(Long id) {
+        SalesOrder order = salesMapper.findById(id);
+        if (order == null) {
+            throw new NotFoundException("销售单不存在");
+        }
+        return new SalesOrderDetail(order, salesMapper.findItems(id));
     }
 
     @Transactional

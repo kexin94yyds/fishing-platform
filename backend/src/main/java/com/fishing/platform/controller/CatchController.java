@@ -2,7 +2,8 @@ package com.fishing.platform.controller;
 
 import com.fishing.platform.common.ApiResponse;
 import com.fishing.platform.domain.DomainModels.CatchRecord;
-import com.fishing.platform.dto.ApiDtos.CatchRequest;
+import com.fishing.platform.dto.ApiDtos.CatchCreateRequest;
+import com.fishing.platform.dto.ApiDtos.CatchUpdateRequest;
 import com.fishing.platform.service.CatchService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
@@ -36,13 +37,13 @@ public class CatchController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<CatchRecord> create(@Valid @RequestBody CatchRequest request) {
+    public ApiResponse<CatchRecord> create(@Valid @RequestBody CatchCreateRequest request) {
         return ApiResponse.ok("渔获记录已创建", service.create(request));
     }
 
     @PutMapping("/{id}")
     public ApiResponse<CatchRecord> update(@PathVariable @Positive Long id,
-                                           @Valid @RequestBody CatchRequest request) {
+                                           @Valid @RequestBody CatchUpdateRequest request) {
         return ApiResponse.ok("渔获记录已更新", service.update(id, request));
     }
 }

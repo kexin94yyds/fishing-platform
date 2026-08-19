@@ -73,6 +73,7 @@ export function statusLabel(status?: string): string {
     PAID: '已支付',
     CONFIRMED: '已确认',
     COMPLETED: '已完成',
+    NO_SHOW: '爽约',
     CANCELLED: '已取消',
     CANCELED: '已取消',
     REFUNDED: '已退款',
@@ -107,7 +108,7 @@ export function statusType(
   if (['AVAILABLE', 'FREE', 'IDLE', 'OPEN', 'ACTIVE', 'ENABLED', 'PAID', 'CONFIRMED', 'COMPLETED', 'ON_SALE', 'RECORDED', 'VERIFIED'].includes(key)) {
     return 'success'
   }
-  if (['PENDING', 'UNPAID', 'PENDING_PAYMENT', 'RESERVED', 'BOOKED', 'MAINTENANCE', 'FULL'].includes(key)) return 'warning'
+  if (['PENDING', 'UNPAID', 'PENDING_PAYMENT', 'RESERVED', 'BOOKED', 'MAINTENANCE', 'FULL', 'NO_SHOW'].includes(key)) return 'warning'
   if (['CANCELLED', 'CANCELED', 'DISABLED', 'INACTIVE', 'OUT_OF_STOCK', 'CLOSED', 'FAILED', 'VOID'].includes(key)) return 'danger'
   if (['OCCUPIED', 'IN_USE'].includes(key)) return 'primary'
   return 'info'

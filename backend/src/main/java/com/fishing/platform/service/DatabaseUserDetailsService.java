@@ -1,7 +1,7 @@
 package com.fishing.platform.service;
 
 import com.fishing.platform.mapper.UserMapper;
-import org.springframework.security.core.userdetails.User;
+import com.fishing.platform.security.DatabaseUserPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -21,10 +21,6 @@ public class DatabaseUserDetailsService implements UserDetailsService {
         if (account == null) {
             throw new UsernameNotFoundException("用户名或密码错误");
         }
-        return User.withUsername(account.username())
-                .password(account.passwordHash())
-                .roles(account.role())
-                .disabled(!account.enabled())
-                .build();
+        return DatabaseUserPrincipal.from(account);
     }
 }

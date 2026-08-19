@@ -1,6 +1,7 @@
 package com.fishing.platform.config;
 
 import com.fishing.platform.mapper.UserMapper;
+import com.fishing.platform.mapper.AccountAuditMapper;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.sql.init.dependency.DependsOnDatabaseInitialization;
@@ -25,18 +26,21 @@ public class MysqlAdminBootstrap implements InitializingBean {
 
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private final AccountAuditMapper auditMapper;
     private final TransactionTemplate transactionTemplate;
     private final String username;
     private final String displayName;
     private final String password;
 
     public MysqlAdminBootstrap(UserMapper userMapper,
+                               AccountAuditMapper auditMapper,
                                PasswordEncoder passwordEncoder,
                                TransactionTemplate transactionTemplate,
                                @Value("${fishing.bootstrap-admin.username:}") String username,
                                @Value("${fishing.bootstrap-admin.display-name:系统管理员}") String displayName,
                                @Value("${fishing.bootstrap-admin.password:}") String password) {
         this.userMapper = userMapper;
+        this.auditMapper = auditMapper;
         this.passwordEncoder = passwordEncoder;
         this.transactionTemplate = transactionTemplate;
         this.username = username == null ? "" : username.trim();
@@ -50,6 +54,7 @@ public class MysqlAdminBootstrap implements InitializingBean {
     }
 
     private void initializeAdmin() {
+        userMapper.lockAdminGuard();
         if (userMapper.countEnabledAdmins() > 0) {
             return;
         }
@@ -60,6 +65,9 @@ public class MysqlAdminBootstrap implements InitializingBean {
             if (userMapper.insertAdmin(username, passwordHash, displayName) != 1) {
                 throw new IllegalStateException("MySQL 管理员初始化失败");
             }
+            var created = userMapper.findByUsername(username);
+            auditMapper.insert(null, "SYSTEM", created.id(), created.username(), "BOOTSTRAP_CREATE",
+                    null, created.role(), null, created.enabled());
             log.info("MySQL 初始管理员已创建：{}", username);
             return;
         }
@@ -67,6 +75,9 @@ public class MysqlAdminBootstrap implements InitializingBean {
                 RETIRED_PASSWORD_HASH) != 1) {
             throw new IllegalStateException("FISHING_BOOTSTRAP_ADMIN_USERNAME 已被非演示账号占用，请更换用户名");
         }
+        var restored = userMapper.findByUsername(username);
+        auditMapper.insert(null, "SYSTEM", restored.id(), restored.username(), "BOOTSTRAP_RESTORE",
+                existing.role(), restored.role(), existing.enabled(), restored.enabled());
         log.info("MySQL 演示管理员已使用安全凭据恢复：{}", username);
     }
 

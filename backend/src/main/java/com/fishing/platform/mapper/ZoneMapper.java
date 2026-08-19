@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public interface ZoneMapper {
@@ -22,6 +23,23 @@ public interface ZoneMapper {
             FROM fishing_zone WHERE id = #{id}
             """)
     Zone findById(@Param("id") Long id);
+
+    @Select("""
+            SELECT id, code, name, description, status, created_at, updated_at
+            FROM fishing_zone WHERE id = #{id} FOR UPDATE
+            """)
+    Zone findByIdForUpdate(@Param("id") Long id);
+
+    @Select("""
+            SELECT COUNT(*) > 0
+            FROM booking b
+            JOIN fishing_spot s ON s.id = b.spot_id
+            WHERE s.zone_id = #{zoneId}
+              AND b.fishing_date > #{fromDate}
+              AND b.status = 'CONFIRMED'
+            """)
+    boolean hasFutureConfirmedBooking(@Param("zoneId") Long zoneId,
+                                      @Param("fromDate") LocalDate fromDate);
 
     @Select("""
             SELECT id, code, name, description, status, created_at, updated_at

@@ -1,19 +1,62 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import type { EChartsOption } from 'echarts'
-import { Refresh } from '@element-plus/icons-vue'
+import { Edit, Plus, Refresh } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import ResourceState from '@/components/ResourceState.vue'
 import EChartPanel from '@/components/EChartPanel.vue'
 import LakeEmptyState from '@/components/LakeEmptyState.vue'
-import { analyticsApi } from '@/api'
-import { errorMessage } from '@/api/http'
-import { formatCurrency, formatDate, formatNumber } from '@/utils/format'
-import type { TrafficAnalytics } from '@/types'
+import { analyticsApi, trafficDailyApi } from '@/api'
+import { ApiError, errorMessage } from '@/api/http'
+import { formatCurrency, formatDate, formatDateTime, formatNumber } from '@/utils/format'
+import { businessDateValue, calendarDateValue, utcDateFromValue, utcDateValue } from '@/utils/businessTime'
+import { useAuthStore } from '@/stores/auth'
+import type { TrafficAnalytics, TrafficDailyEntry } from '@/types'
 
+const auth = useAuthStore()
+const canManageTraffic = computed(() => auth.isAdmin)
 const days = ref(7)
 const loading = ref(true)
 const error = ref('')
 const data = ref<TrafficAnalytics | null>(null)
+const trafficEntries = ref<TrafficDailyEntry[]>([])
+const trafficDialogOpen = ref(false)
+const trafficSaving = ref(false)
+const editingTrafficEntry = ref(false)
+const trafficFormRef = ref<FormInstance>()
+let loadSequence = 0
+
+type TrafficForm = {
+  statDate: string
+  visits: number
+  uniqueVisitors: number
+  notes: string
+  expectedVersion: number | null
+}
+
+const trafficForm = reactive<TrafficForm>({
+  statDate: businessDateValue(),
+  visits: 0,
+  uniqueVisitors: 0,
+  notes: '',
+  expectedVersion: null,
+})
+
+const trafficRules: FormRules = {
+  statDate: [{ required: true, message: '请选择业务日期', trigger: 'change' }],
+  visits: [{ required: true, message: '请输入到访人数', trigger: 'change' }],
+  uniqueVisitors: [
+    { required: true, message: '请输入独立访客数', trigger: 'change' },
+    {
+      validator: (_rule, value, callback) => {
+        if (Number(value) > Number(trafficForm.visits)) callback(new Error('独立访客数不能大于到访人数'))
+        else callback()
+      },
+      trigger: 'change',
+    },
+  ],
+}
 const hasTrafficData = computed(() =>
   (data.value?.series ?? []).some((point) => point.visits > 0 || point.uniqueVisitors > 0),
 )
@@ -130,15 +173,88 @@ function dateLabel(value: string) {
   return formatDate(value, { month: 'long', day: 'numeric' })
 }
 
+const minimumTrafficDate = utcDateValue(
+  new Date(utcDateFromValue(businessDateValue()).getTime() - 29 * 24 * 60 * 60 * 1000),
+)
+
+function disableTrafficDate(date: Date) {
+  const value = calendarDateValue(date)
+  return value > businessDateValue() || value < minimumTrafficDate
+}
+
+function openTrafficEntry(entry?: TrafficDailyEntry) {
+  editingTrafficEntry.value = Boolean(entry)
+  Object.assign(trafficForm, {
+    statDate: entry?.statDate ?? businessDateValue(),
+    visits: entry?.visits ?? 0,
+    uniqueVisitors: entry?.uniqueVisitors ?? 0,
+    notes: entry?.notes ?? '',
+    expectedVersion: entry?.version ?? null,
+  })
+  trafficFormRef.value?.clearValidate()
+  trafficDialogOpen.value = true
+}
+
+async function loadTrafficEntries() {
+  if (!canManageTraffic.value) {
+    trafficEntries.value = []
+    return
+  }
+  trafficEntries.value = await trafficDailyApi.list(30)
+}
+
+async function saveTrafficEntry() {
+  if (trafficSaving.value) return
+  const valid = await trafficFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+
+  trafficSaving.value = true
+  try {
+    await trafficDailyApi.upsert(trafficForm.statDate, {
+      visits: Number(trafficForm.visits),
+      uniqueVisitors: Number(trafficForm.uniqueVisitors),
+      notes: trafficForm.notes.trim() || undefined,
+      expectedVersion: trafficForm.expectedVersion ?? undefined,
+    })
+    ElMessage.success('客流日汇总已保存')
+    trafficDialogOpen.value = false
+    await load()
+  } catch (reason) {
+    if (reason instanceof ApiError && reason.status === 409) {
+      await load()
+      const refreshed = trafficEntries.value.find((entry) => entry.statDate === trafficForm.statDate)
+      if (refreshed) {
+        Object.assign(trafficForm, {
+          visits: refreshed.visits,
+          uniqueVisitors: refreshed.uniqueVisitors,
+          notes: refreshed.notes ?? '',
+          expectedVersion: refreshed.version,
+        })
+        trafficFormRef.value?.clearValidate()
+      }
+      ElMessage.warning('该日期的客流记录已被其他操作更新，已载入最新数据，请核对后再保存。')
+      return
+    }
+    ElMessage.error(errorMessage(reason))
+  } finally {
+    trafficSaving.value = false
+  }
+}
+
 async function load() {
+  const sequence = ++loadSequence
   loading.value = true
   error.value = ''
   try {
-    data.value = await analyticsApi.traffic(days.value)
+    const [analytics] = await Promise.all([
+      analyticsApi.traffic(days.value),
+      loadTrafficEntries(),
+    ])
+    if (sequence === loadSequence) data.value = analytics
   } catch (reason) {
-    error.value = errorMessage(reason)
+    if (sequence === loadSequence) error.value = errorMessage(reason)
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) loading.value = false
   }
 }
 
@@ -151,7 +267,7 @@ onMounted(load)
       <div>
         <span class="station-kicker">客流研判</span>
         <h1>把人流变化摊开来看</h1>
-        <p>到访、预订、会员与营收均来自同一统计周期。</p>
+        <p>到访与独立访客来自日汇总；预订、会员与营收仍实时取自业务事实。</p>
       </div>
       <div class="traffic-head__actions">
         <el-radio-group v-model="days" aria-label="统计周期" @change="load">
@@ -306,7 +422,102 @@ onMounted(load)
           </div>
         </aside>
       </section>
+
+      <section v-if="canManageTraffic" class="traffic-ledger">
+        <header class="traffic-ledger__head">
+          <div>
+            <span class="station-kicker">人工客流台账</span>
+            <h2>按业务日期复核到访</h2>
+            <p>这里只能录入到访与独立访客；预订、会员和营收始终由实时业务数据计算。</p>
+          </div>
+          <el-button type="primary" :icon="Plus" @click="openTrafficEntry()">录入客流</el-button>
+        </header>
+
+        <LakeEmptyState
+          v-if="!trafficEntries.length"
+          title="近 30 天暂无客流台账"
+          description="可从当天或近 30 天的历史业务日期开始录入"
+          compact
+        />
+        <div v-else class="traffic-ledger__list">
+          <article v-for="entry in trafficEntries" :key="entry.statDate" class="traffic-ledger__row">
+            <div class="traffic-ledger__date">
+              <strong>{{ dateLabel(entry.statDate) }}</strong>
+              <small>{{ entry.statDate }}</small>
+            </div>
+            <div>
+              <span>到访</span>
+              <strong class="metric-value">{{ entry.visits }} 人</strong>
+            </div>
+            <div>
+              <span>独立访客</span>
+              <strong class="metric-value">{{ entry.uniqueVisitors }} 人</strong>
+            </div>
+            <div class="traffic-ledger__note">
+              <span>备注 / 来源</span>
+              <p>{{ entry.notes || '未填写' }}</p>
+            </div>
+            <div class="traffic-ledger__audit">
+              <small>版本 {{ entry.version }} · {{ entry.updatedByName || '历史数据' }}</small>
+              <small>{{ formatDateTime(entry.updatedAt) }}</small>
+            </div>
+            <el-button :icon="Edit" plain @click="openTrafficEntry(entry)">编辑</el-button>
+          </article>
+        </div>
+      </section>
     </ResourceState>
+
+    <el-dialog
+      v-model="trafficDialogOpen"
+      :title="editingTrafficEntry ? '编辑客流日汇总' : '录入客流日汇总'"
+      width="min(560px, calc(100vw - 32px))"
+      destroy-on-close
+    >
+      <p class="traffic-dialog__hint">
+        保存会保留录入人与更新时间。若其他人已更新同一日期，系统会提示刷新后再核对。
+      </p>
+      <el-form ref="trafficFormRef" :model="trafficForm" :rules="trafficRules" label-position="top">
+        <el-form-item label="业务日期" prop="statDate">
+          <el-date-picker
+            v-model="trafficForm.statDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            format="YYYY 年 MM 月 DD 日"
+            :disabled="editingTrafficEntry"
+            :disabled-date="disableTrafficDate"
+            placeholder="选择业务日期"
+          />
+        </el-form-item>
+        <div class="traffic-dialog__numbers">
+          <el-form-item label="到访人数" prop="visits">
+            <el-input-number v-model="trafficForm.visits" :min="0" :step="1" controls-position="right" />
+          </el-form-item>
+          <el-form-item label="独立访客" prop="uniqueVisitors">
+            <el-input-number
+              v-model="trafficForm.uniqueVisitors"
+              :min="0"
+              :max="trafficForm.visits"
+              :step="1"
+              controls-position="right"
+            />
+          </el-form-item>
+        </div>
+        <el-form-item label="备注 / 来源说明" prop="notes">
+          <el-input
+            v-model="trafficForm.notes"
+            type="textarea"
+            :rows="3"
+            maxlength="500"
+            show-word-limit
+            placeholder="例如：主入口人工计数、闸机导出汇总"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="trafficDialogOpen = false">取消</el-button>
+        <el-button type="primary" :loading="trafficSaving" @click="saveTrafficEntry">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -567,6 +778,101 @@ onMounted(load)
   font-size: 11px;
 }
 
+.traffic-ledger {
+  margin-top: 14px;
+  padding: 20px 23px;
+  border: 1px solid #d8cfbf;
+  border-radius: 14px;
+  background: var(--paper-50);
+}
+
+.traffic-ledger__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 15px;
+}
+
+.traffic-ledger h2 {
+  margin: 3px 0 0;
+  color: #263c33;
+  font-size: 19px;
+}
+
+.traffic-ledger__head p {
+  max-width: 650px;
+  margin: 5px 0 0;
+  color: #818a84;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.traffic-ledger__list {
+  overflow: auto;
+  max-height: 490px;
+  border-top: 1px solid #e7dfd4;
+}
+
+.traffic-ledger__row {
+  display: grid;
+  grid-template-columns: minmax(108px, 0.8fr) minmax(90px, 0.66fr) minmax(100px, 0.72fr) minmax(160px, 1.6fr) minmax(132px, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-width: 760px;
+  padding: 12px 2px;
+  border-bottom: 1px solid #e7dfd4;
+}
+
+.traffic-ledger__row > div > span,
+.traffic-ledger__note > span {
+  display: block;
+  color: #8b948e;
+  font-size: 10px;
+}
+
+.traffic-ledger__row strong {
+  display: block;
+  margin-top: 3px;
+  color: #294338;
+  font-size: 13px;
+}
+
+.traffic-ledger__date small,
+.traffic-ledger__audit small {
+  display: block;
+  color: #8b948e;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.traffic-ledger__note p {
+  overflow: hidden;
+  margin: 3px 0 0;
+  color: #58665e;
+  font-size: 11px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.traffic-dialog__hint {
+  margin: 0 0 16px;
+  color: #65716a;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.traffic-dialog__numbers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.traffic-dialog__numbers :deep(.el-input-number) {
+  width: 100%;
+}
+
 .data-table-details {
   margin-top: 10px;
   color: #56665f;
@@ -667,9 +973,15 @@ onMounted(load)
 
   .trend-sheet,
   .operation-sheet,
-  .revenue-diary {
+  .revenue-diary,
+  .traffic-ledger {
     padding-right: 13px;
     padding-left: 13px;
+  }
+
+  .traffic-ledger__head {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .chart-legend {
@@ -697,6 +1009,11 @@ onMounted(load)
 
   .traffic-head__actions > .el-button {
     width: 100%;
+  }
+
+  .traffic-dialog__numbers {
+    grid-template-columns: 1fr;
+    gap: 0;
   }
 }
 </style>

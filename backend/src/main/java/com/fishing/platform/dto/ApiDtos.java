@@ -49,6 +49,46 @@ public final class ApiDtos {
     public record MeView(Long id, String username, String displayName, String role) {
     }
 
+    public record AccountCreateRequest(
+            @NotBlank
+            @Pattern(regexp = "[a-z][a-z0-9_]{3,31}",
+                    message = "须以小写字母开头，仅含小写字母、数字或下划线，长度 4-32 位")
+            String username,
+            @NotBlank @Size(min = 2, max = 100) String displayName,
+            @NotBlank @Size(min = 8, max = 64)
+            @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d)\\S{8,64}$",
+                    message = "须至少包含一个英文字母和一个数字，且不能包含空格")
+            String password,
+            @NotBlank @Pattern(regexp = "ADMIN|OPERATOR", message = "必须是 ADMIN 或 OPERATOR") String role
+    ) {
+    }
+
+    public record AccountUpdateRequest(
+            @NotBlank @Size(min = 2, max = 100) String displayName,
+            @NotBlank @Pattern(regexp = "ADMIN|OPERATOR", message = "必须是 ADMIN 或 OPERATOR") String role,
+            @NotNull Boolean enabled,
+            @NotNull @Min(0) Long expectedVersion
+    ) {
+    }
+
+    public record AccountPasswordResetRequest(
+            @NotBlank @Size(min = 8, max = 64)
+            @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d)\\S{8,64}$",
+                    message = "须至少包含一个英文字母和一个数字，且不能包含空格")
+            String newPassword,
+            @NotNull @Min(0) Long expectedVersion
+    ) {
+    }
+
+    public record ChangePasswordRequest(
+            @NotBlank @Size(max = 64) String currentPassword,
+            @NotBlank @Size(min = 8, max = 64)
+            @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d)\\S{8,64}$",
+                    message = "须至少包含一个英文字母和一个数字，且不能包含空格")
+            String newPassword
+    ) {
+    }
+
     public record ZoneRequest(
             Long id,
             @NotBlank @Size(max = 32) String code,
@@ -90,8 +130,19 @@ public final class ApiDtos {
     ) {
     }
 
-    public record CatchRequest(
-            Long id,
+    public record CatchCreateRequest(
+            Long bookingId,
+            @NotNull Long spotId,
+            Long memberId,
+            @NotNull LocalDate fishingDate,
+            @NotBlank @Size(max = 100) String species,
+            @NotNull @DecimalMin(value = "0.00") @Digits(integer = 8, fraction = 2) BigDecimal weight,
+            @NotNull @Min(1) Integer quantity,
+            @Size(max = 500) String notes
+    ) {
+    }
+
+    public record CatchUpdateRequest(
             Long bookingId,
             @NotNull Long spotId,
             Long memberId,
@@ -100,7 +151,19 @@ public final class ApiDtos {
             @NotNull @DecimalMin(value = "0.00") @Digits(integer = 8, fraction = 2) BigDecimal weight,
             @NotNull @Min(1) Integer quantity,
             @Size(max = 500) String notes,
-            @Pattern(regexp = "RECORDED|VERIFIED|VOID", message = "必须是 RECORDED、VERIFIED 或 VOID") String status
+            @NotBlank
+            @Pattern(regexp = "RECORDED|VERIFIED|VOID", message = "必须是 RECORDED、VERIFIED 或 VOID") String status,
+            @NotBlank
+            @Pattern(regexp = "RECORDED|VERIFIED|VOID", message = "必须是 RECORDED、VERIFIED 或 VOID") String expectedStatus,
+            @NotNull @Min(0) Long expectedVersion
+    ) {
+    }
+
+    public record TrafficDailyUpsertRequest(
+            @NotNull @Min(0) Integer visits,
+            @NotNull @Min(0) Integer uniqueVisitors,
+            @Size(max = 500) String notes,
+            @Min(0) Long expectedVersion
     ) {
     }
 

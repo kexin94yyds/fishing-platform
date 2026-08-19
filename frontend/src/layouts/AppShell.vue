@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -15,9 +15,12 @@ import {
   Search,
   SwitchButton,
   User,
+  UserFilled,
 } from '@element-plus/icons-vue'
 import QuickNavigator from '@/components/QuickNavigator.vue'
 import { useAuthStore } from '@/stores/auth'
+import { authApi } from '@/api'
+import { errorMessage } from '@/api/http'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,7 +34,7 @@ const todayLabel = new Intl.DateTimeFormat('zh-CN', {
   weekday: 'short',
 }).format(new Date())
 
-const menuItems = [
+const menuItems = computed(() => [
   { path: '/', label: '总体看板', hint: '经营概况与今日运行', keywords: '首页 仪表盘 数据', icon: Operation },
   { path: '/zones-spots', label: '钓位分区', hint: '分区、钓位与现场状态', keywords: '区域 位置 状态', icon: Grid },
   { path: '/bookings', label: '时段预订', hint: '空闲时段与客户预订', keywords: '预约 时间 客户', icon: Calendar },
@@ -40,7 +43,10 @@ const menuItems = [
   { path: '/members', label: '会员管理', hint: '会员资料与账户状态', keywords: '客户 用户 等级', icon: User },
   { path: '/payments', label: '收费订单', hint: '收费记录与收款确认', keywords: '支付 账单 收款', icon: Coin },
   { path: '/analytics', label: '客流分析', hint: '趋势、时段与来源构成', keywords: '统计 趋势 来源', icon: DataAnalysis },
-]
+  ...(auth.isAdmin
+    ? [{ path: '/accounts', label: '账号管理', hint: '账号、角色与会话状态', keywords: '用户 权限 管理员 密码', icon: UserFilled }]
+    : []),
+])
 
 const roleLabel = computed(() => {
   const role = String(auth.user?.role || '').toUpperCase()
@@ -48,6 +54,9 @@ const roleLabel = computed(() => {
   if (role === 'OPERATOR') return '运营人员'
   return auth.user?.role || '运营人员'
 })
+const passwordDialogOpen = ref(false)
+const changingPassword = ref(false)
+const passwordForm = reactive({ currentPassword: '', newPassword: '', confirmPassword: '' })
 
 function closeMobileMenu() {
   mobileMenuOpen.value = false
@@ -82,6 +91,36 @@ async function handleLogout() {
   } finally {
     loggingOut.value = false
   }
+}
+
+async function changePassword() {
+  if (!passwordForm.currentPassword || !passwordForm.newPassword) {
+    ElMessage.warning('请填写当前密码和新密码')
+    return
+  }
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    ElMessage.warning('两次输入的新密码不一致')
+    return
+  }
+  changingPassword.value = true
+  try {
+    await authApi.changePassword({
+      currentPassword: passwordForm.currentPassword,
+      newPassword: passwordForm.newPassword,
+    })
+    auth.clearSession()
+    passwordDialogOpen.value = false
+    ElMessage.success('密码已修改，请使用新密码重新登录')
+    await router.replace('/login')
+  } catch (reason) {
+    ElMessage.error(errorMessage(reason))
+  } finally {
+    changingPassword.value = false
+  }
+}
+
+function clearPasswordForm() {
+  Object.assign(passwordForm, { currentPassword: '', newPassword: '', confirmPassword: '' })
 }
 </script>
 
@@ -181,6 +220,15 @@ async function handleLogout() {
             <strong>{{ auth.user?.displayName || '运营人员' }}</strong>
             <span>{{ roleLabel }}</span>
           </div>
+          <el-tooltip content="修改密码" placement="bottom">
+            <el-button
+              :icon="User"
+              circle
+              plain
+              aria-label="修改当前账号密码"
+              @click="passwordDialogOpen = true"
+            />
+          </el-tooltip>
           <el-tooltip content="退出登录" placement="bottom">
             <el-button
               :icon="SwitchButton"
@@ -204,6 +252,25 @@ async function handleLogout() {
     </section>
 
     <QuickNavigator v-model="quickNavigatorOpen" :items="menuItems" />
+
+    <el-dialog v-model="passwordDialogOpen" title="修改当前账号密码" width="460px" destroy-on-close @closed="clearPasswordForm">
+      <el-form label-position="top">
+        <el-form-item label="当前密码" required>
+          <el-input v-model="passwordForm.currentPassword" type="password" show-password autocomplete="current-password" />
+        </el-form-item>
+        <el-form-item label="新密码" required>
+          <el-input v-model="passwordForm.newPassword" type="password" show-password autocomplete="new-password" />
+        </el-form-item>
+        <el-form-item label="再次输入新密码" required>
+          <el-input v-model="passwordForm.confirmPassword" type="password" show-password autocomplete="new-password" />
+        </el-form-item>
+      </el-form>
+      <el-alert title="修改成功后，所有旧会话都会失效，需要重新登录。" type="info" :closable="false" show-icon />
+      <template #footer>
+        <el-button @click="passwordDialogOpen = false">取消</el-button>
+        <el-button type="primary" :loading="changingPassword" @click="changePassword">确认修改</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 

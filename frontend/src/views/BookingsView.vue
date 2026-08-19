@@ -7,6 +7,7 @@ import ResourceState from '@/components/ResourceState.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { bookingApi, memberApi, spotApi } from '@/api'
 import { errorMessage } from '@/api/http'
+import { useAuthStore } from '@/stores/auth'
 import { formatCurrency, formatDate, timeSlotLabel } from '@/utils/format'
 import {
   businessDateValue,
@@ -16,6 +17,8 @@ import {
 } from '@/utils/businessTime'
 import type { Availability, Booking, Id, Member, Spot } from '@/types'
 
+const auth = useAuthStore()
+const canSettleBookings = computed(() => auth.isAdmin)
 const loading = ref(true)
 const error = ref('')
 const bookings = ref<Booking[]>([])
@@ -26,6 +29,8 @@ const availabilityChecked = ref(false)
 const dialogOpen = ref(false)
 const saving = ref(false)
 const checkingAvailability = ref(false)
+const settlingId = ref<Id | null>(null)
+const settlingAction = ref<'complete' | 'noShow' | null>(null)
 const formRef = ref<FormInstance>()
 const formShellRef = ref<HTMLElement>()
 
@@ -285,6 +290,10 @@ async function save() {
 }
 
 async function cancelBooking(booking: Booking) {
+  if (!canCancelBooking(booking)) {
+    ElMessage.warning('仅可取消垂钓日前的已确认预约')
+    return
+  }
   try {
     await ElMessageBox.confirm(
       `确认取消预订 ${booking.bookingNo || booking.id} 吗？`,
@@ -300,6 +309,43 @@ async function cancelBooking(booking: Booking) {
     await load()
   } catch (reason) {
     if (reason !== 'cancel' && reason !== 'close') ElMessage.error(errorMessage(reason))
+  }
+}
+
+function canCancelBooking(booking: Booking) {
+  return booking.status === 'CONFIRMED' && booking.fishingDate > todayValue.value
+}
+
+function canSettleBooking(booking: Booking) {
+  return booking.status === 'CONFIRMED' && booking.fishingDate <= todayValue.value
+}
+
+async function settleBooking(booking: Booking, action: 'complete' | 'noShow') {
+  if (!canSettleBookings.value || !canSettleBooking(booking)) return
+  const noShow = action === 'noShow'
+  try {
+    await ElMessageBox.confirm(
+      noShow
+        ? `确认将预订 ${booking.bookingNo || booking.id} 标记为爽约吗？`
+        : `确认完成预订 ${booking.bookingNo || booking.id} 的结单吗？`,
+      noShow ? '标记爽约' : '完成结单',
+      {
+        confirmButtonText: noShow ? '确认爽约' : '确认完成',
+        cancelButtonText: '返回',
+        type: noShow ? 'warning' : 'success',
+      },
+    )
+    settlingId.value = booking.id
+    settlingAction.value = action
+    if (noShow) await bookingApi.noShow(booking.id)
+    else await bookingApi.complete(booking.id)
+    ElMessage.success(noShow ? '预订已标记为爽约' : '预订已完成结单')
+    await load()
+  } catch (reason) {
+    if (reason !== 'cancel' && reason !== 'close') ElMessage.error(errorMessage(reason))
+  } finally {
+    settlingId.value = null
+    settlingAction.value = null
   }
 }
 
@@ -346,6 +392,8 @@ onMounted(load)
         style="width: 130px"
       >
         <el-option label="已确认" value="CONFIRMED" />
+        <el-option label="已完成" value="COMPLETED" />
+        <el-option label="爽约" value="NO_SHOW" />
         <el-option label="已取消" value="CANCELLED" />
       </el-select>
       <span>本周 {{ visibleBookings.length }} 笔预约</span>
@@ -421,11 +469,34 @@ onMounted(load)
                     <el-button
                       link
                       type="danger"
-                      :disabled="booking.status === 'CANCELLED'"
+                      :disabled="!canCancelBooking(booking)"
+                      :title="canCancelBooking(booking) ? undefined : '仅可取消垂钓日前的已确认预约'"
                       @click="cancelBooking(booking)"
                     >
                       取消预订
                     </el-button>
+                    <template v-if="canSettleBookings && booking.status === 'CONFIRMED'">
+                      <el-button
+                        link
+                        type="primary"
+                        :disabled="!canSettleBooking(booking)"
+                        :loading="settlingId === booking.id && settlingAction === 'complete'"
+                        :title="canSettleBooking(booking) ? undefined : '未来预约不能结单'"
+                        @click="settleBooking(booking, 'complete')"
+                      >
+                        完成结单
+                      </el-button>
+                      <el-button
+                        link
+                        type="warning"
+                        :disabled="!canSettleBooking(booking)"
+                        :loading="settlingId === booking.id && settlingAction === 'noShow'"
+                        :title="canSettleBooking(booking) ? undefined : '未来预约不能结单'"
+                        @click="settleBooking(booking, 'noShow')"
+                      >
+                        标记爽约
+                      </el-button>
+                    </template>
                   </div>
                 </el-popover>
               </div>
@@ -517,11 +588,34 @@ onMounted(load)
                   <el-button
                     link
                     type="danger"
-                    :disabled="booking.status === 'CANCELLED'"
+                    :disabled="!canCancelBooking(booking)"
+                    :title="canCancelBooking(booking) ? undefined : '仅可取消垂钓日前的已确认预约'"
                     @click="cancelBooking(booking)"
                   >
                     取消预订
                   </el-button>
+                  <template v-if="canSettleBookings && booking.status === 'CONFIRMED'">
+                    <el-button
+                      link
+                      type="primary"
+                      :disabled="!canSettleBooking(booking)"
+                      :loading="settlingId === booking.id && settlingAction === 'complete'"
+                      :title="canSettleBooking(booking) ? undefined : '未来预约不能结单'"
+                      @click="settleBooking(booking, 'complete')"
+                    >
+                      完成结单
+                    </el-button>
+                    <el-button
+                      link
+                      type="warning"
+                      :disabled="!canSettleBooking(booking)"
+                      :loading="settlingId === booking.id && settlingAction === 'noShow'"
+                      :title="canSettleBooking(booking) ? undefined : '未来预约不能结单'"
+                      @click="settleBooking(booking, 'noShow')"
+                    >
+                      标记爽约
+                    </el-button>
+                  </template>
                 </div>
               </el-popover>
             </div>

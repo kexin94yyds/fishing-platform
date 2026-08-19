@@ -16,7 +16,7 @@ public interface CatchMapper {
             SELECT c.id, c.catch_no, c.booking_id, b.booking_no, c.spot_id, s.name AS spot_name,
                    c.member_id, m.name AS member_name, c.fishing_date,
                    c.species, c.weight, c.quantity, c.notes, c.status,
-                   c.created_at, c.updated_at
+                   c.version, c.created_at, c.updated_at
             FROM catch_record c
             LEFT JOIN booking b ON b.id = c.booking_id
             JOIN fishing_spot s ON s.id = c.spot_id
@@ -28,6 +28,9 @@ public interface CatchMapper {
 
     @Select(BASE_SELECT + " WHERE c.id = #{id}")
     CatchRecord findById(@Param("id") Long id);
+
+    @Select("SELECT id FROM catch_record WHERE id = #{id} FOR UPDATE")
+    Long lockById(@Param("id") Long id);
 
     @Select(BASE_SELECT + " WHERE c.catch_no = #{catchNo}")
     CatchRecord findByNo(@Param("catchNo") String catchNo);
@@ -54,8 +57,9 @@ public interface CatchMapper {
             UPDATE catch_record
             SET booking_id = #{bookingId}, spot_id = #{spotId}, member_id = #{memberId}, fishing_date = #{fishingDate},
                 species = #{species}, weight = #{weight}, quantity = #{quantity},
-                notes = #{notes}, status = #{status}, updated_at = CURRENT_TIMESTAMP
-            WHERE id = #{id}
+                notes = #{notes}, status = #{status}, version = version + 1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = #{id} AND status = #{expectedStatus} AND version = #{expectedVersion}
             """)
     int update(@Param("id") Long id,
                @Param("bookingId") Long bookingId,
@@ -66,5 +70,7 @@ public interface CatchMapper {
                @Param("weight") BigDecimal weight,
                @Param("quantity") Integer quantity,
                @Param("notes") String notes,
-               @Param("status") String status);
+               @Param("status") String status,
+               @Param("expectedStatus") String expectedStatus,
+               @Param("expectedVersion") Long expectedVersion);
 }
