@@ -8,10 +8,12 @@ import LakeEmptyState from '@/components/LakeEmptyState.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { memberApi } from '@/api'
 import { errorMessage } from '@/api/http'
-import { formatDateTime } from '@/utils/format'
+import { formatCurrency, formatDate, formatDateTime, timeSlotLabel } from '@/utils/format'
 import { focusFirstInvalid } from '@/utils/forms'
-import type { Id, Member } from '@/types'
+import { useAuthStore } from '@/stores/auth'
+import type { Id, Member, MemberActivity, MemberAudit } from '@/types'
 
+const auth = useAuthStore()
 const loading = ref(true)
 const error = ref('')
 const members = ref<Member[]>([])
@@ -23,6 +25,9 @@ const dialogOpen = ref(false)
 const saving = ref(false)
 const formRef = ref<FormInstance>()
 const memberDetailRef = ref<HTMLElement>()
+const activityLoading = ref(false)
+const activity = ref<MemberActivity | null>(null)
+const audits = ref<MemberAudit[]>([])
 
 type MemberForm = {
   id?: Id
@@ -98,6 +103,7 @@ async function load() {
     if (!members.value.some((member) => String(member.id) === String(selectedMemberId.value))) {
       selectedMemberId.value = members.value[0]?.id ?? ''
     }
+    await loadSelectedMemberActivity()
   } catch (reason) {
     error.value = errorMessage(reason)
   } finally {
@@ -121,6 +127,7 @@ function openForm(member?: Member) {
 
 async function selectMember(id: Id) {
   selectedMemberId.value = id
+  await loadSelectedMemberActivity()
   if (!window.matchMedia('(max-width: 760px)').matches) return
   await nextTick()
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -128,6 +135,31 @@ async function selectMember(id: Id) {
     behavior: reduceMotion ? 'auto' : 'smooth',
     block: 'start',
   })
+}
+
+async function loadSelectedMemberActivity() {
+  if (!selectedMemberId.value) {
+    activity.value = null
+    audits.value = []
+    return
+  }
+  activityLoading.value = true
+  try {
+    const [activityResult, auditResult] = await Promise.all([
+      memberApi.activity(selectedMemberId.value),
+      auth.isAdmin ? memberApi.audits(selectedMemberId.value, 20) : Promise.resolve({ records: [], total: 0 }),
+    ])
+    activity.value = activityResult
+    audits.value = auditResult.records
+  } catch (reason) {
+    ElMessage.error(errorMessage(reason))
+  } finally {
+    activityLoading.value = false
+  }
+}
+
+function memberAuditLabel(action: string) {
+  return action === 'CREATE' ? '创建会员' : action === 'UPDATE' ? '更新会员' : action
 }
 
 async function save() {
@@ -297,6 +329,77 @@ onMounted(load)
                 <dd>{{ formatDateTime(selectedMember.createdAt) }}</dd>
               </div>
             </dl>
+
+            <section class="member-activity" v-loading="activityLoading">
+              <header>
+                <div>
+                  <span>关联业务档案</span>
+                  <strong>
+                    {{ activity?.bookings.length || 0 }} 次预约 ·
+                    {{ activity?.catches.length || 0 }} 笔渔获 ·
+                    {{ activity?.salesOrders.length || 0 }} 笔消费
+                  </strong>
+                </div>
+              </header>
+              <el-tabs>
+                <el-tab-pane label="预约">
+                  <LakeEmptyState
+                    v-if="!activity?.bookings.length"
+                    title="暂无预约记录"
+                    description="会员关联预约后会显示在这里"
+                    compact
+                  />
+                  <div v-else class="activity-list">
+                    <article v-for="booking in activity.bookings.slice(0, 8)" :key="booking.id">
+                      <div><strong>{{ booking.bookingNo || booking.id }}</strong><span>{{ booking.spotName }}</span></div>
+                      <div><span>{{ formatDate(booking.fishingDate) }} {{ timeSlotLabel(booking.timeSlot) }}</span><b>{{ formatCurrency(booking.amount) }}</b></div>
+                    </article>
+                  </div>
+                </el-tab-pane>
+                <el-tab-pane label="渔获">
+                  <LakeEmptyState
+                    v-if="!activity?.catches.length"
+                    title="暂无渔获记录"
+                    description="会员关联渔获后会显示在这里"
+                    compact
+                  />
+                  <div v-else class="activity-list">
+                    <article v-for="record in activity.catches.slice(0, 8)" :key="record.id">
+                      <div><strong>{{ record.species }}</strong><span>{{ record.zoneName }} · {{ record.spotName }}</span></div>
+                      <div><span>{{ formatDate(record.fishingDate) }} {{ timeSlotLabel(record.timeSlot) }}</span><b>{{ record.weight }} kg</b></div>
+                    </article>
+                  </div>
+                </el-tab-pane>
+                <el-tab-pane label="消费">
+                  <LakeEmptyState
+                    v-if="!activity?.salesOrders.length"
+                    title="暂无消费记录"
+                    description="会员关联现场销售后会显示在这里"
+                    compact
+                  />
+                  <div v-else class="activity-list">
+                    <article v-for="order in activity.salesOrders.slice(0, 8)" :key="order.id">
+                      <div><strong>{{ order.orderNo || order.id }}</strong><StatusTag :status="order.status" /></div>
+                      <div><span>{{ formatDateTime(order.createdAt) }}</span><b>{{ formatCurrency(order.totalAmount) }}</b></div>
+                    </article>
+                  </div>
+                </el-tab-pane>
+                <el-tab-pane v-if="auth.isAdmin" label="审计">
+                  <LakeEmptyState
+                    v-if="!audits.length"
+                    title="暂无会员操作记录"
+                    description="创建或修改会员后会留下审计轨迹"
+                    compact
+                  />
+                  <div v-else class="activity-list">
+                    <article v-for="audit in audits" :key="audit.id">
+                      <div><strong>{{ memberAuditLabel(audit.action) }}</strong><span>{{ audit.actorUsername }}</span></div>
+                      <div><span>{{ formatDateTime(audit.createdAt) }}</span><b>{{ audit.beforeStatus || '—' }} → {{ audit.afterStatus || '—' }}</b></div>
+                    </article>
+                  </div>
+                </el-tab-pane>
+              </el-tabs>
+            </section>
 
             <el-button type="primary" :icon="Edit" @click="openForm(selectedMember)">
               编辑会员资料
@@ -610,6 +713,68 @@ onMounted(load)
   margin: 6px 0 0;
   color: #34443d;
   font-size: 12px;
+}
+
+.member-activity {
+  margin: 0 0 24px;
+  padding: 16px;
+  border: 1px solid #ded5c8;
+  border-radius: 10px;
+  background: #fbf8f1;
+}
+
+.member-activity > header {
+  margin-bottom: 8px;
+}
+
+.member-activity > header span,
+.member-activity > header strong {
+  display: block;
+}
+
+.member-activity > header span {
+  color: var(--clay-700);
+  font-size: 11px;
+}
+
+.member-activity > header strong {
+  margin-top: 4px;
+  color: var(--lake-900);
+  font-size: 12px;
+}
+
+.activity-list {
+  display: grid;
+  gap: 8px;
+}
+
+.activity-list article {
+  display: grid;
+  gap: 5px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e5ddd0;
+}
+
+.activity-list article:last-child {
+  border-bottom: 0;
+}
+
+.activity-list article > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.activity-list strong,
+.activity-list b {
+  color: var(--lake-900);
+  font-size: 11px;
+}
+
+.activity-list span {
+  color: var(--ink-500);
+  font-size: 10px;
 }
 
 @media (max-width: 1020px) {

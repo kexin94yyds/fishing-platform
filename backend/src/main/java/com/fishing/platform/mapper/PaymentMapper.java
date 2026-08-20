@@ -13,11 +13,15 @@ public interface PaymentMapper {
 
     String BASE_SELECT = """
             SELECT p.id, p.payment_no, p.business_type, p.business_id,
-                   CASE WHEN p.business_type = 'SALES_ORDER' THEN o.order_no ELSE NULL END AS business_no,
+                   CASE WHEN p.business_type = 'SALES_ORDER' THEN o.order_no
+                        WHEN p.business_type = 'BOOKING' THEN b.booking_no
+                        ELSE NULL END AS business_no,
                    p.amount, p.method, p.status, p.confirmed_at, p.created_at, p.updated_at
             FROM payment p
             LEFT JOIN sales_order o
               ON p.business_type = 'SALES_ORDER' AND o.id = p.business_id
+            LEFT JOIN booking b
+              ON p.business_type = 'BOOKING' AND b.id = p.business_id
             """;
 
     @Select(BASE_SELECT + " ORDER BY p.created_at DESC, p.id DESC")

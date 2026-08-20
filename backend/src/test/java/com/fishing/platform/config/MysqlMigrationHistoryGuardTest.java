@@ -56,7 +56,7 @@ class MysqlMigrationHistoryGuardTest {
         MigrationInfo[] migrations = {
                 migration("2", MigrationState.MISSING_SUCCESS),
                 migration("4", MigrationState.MISSING_SUCCESS),
-                migration("11", MigrationState.PENDING)
+                migration("13", MigrationState.PENDING)
         };
         when(flyway.info()).thenReturn(migrationInfoService);
         when(migrationInfoService.all()).thenReturn(migrations);
@@ -75,7 +75,7 @@ class MysqlMigrationHistoryGuardTest {
     void rejectsUnexpectedMissingHistoryBeforeExecutingAnyPendingMigration() {
         Flyway flyway = flywayFor(
                 migration("70", MigrationState.MISSING_SUCCESS),
-                migration("11", MigrationState.PENDING));
+                migration("13", MigrationState.PENDING));
 
         assertThrows(IllegalStateException.class, () -> new MysqlMigrationHistoryGuard().migrate(flyway));
         verify(flyway, never()).migrate();

@@ -77,6 +77,8 @@ class PlatformIntegrationTest {
         mockMvc.perform(get("/api/dashboard/summary").session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.visitorsToday", is(186)))
+                .andExpect(jsonPath("$.data.todaySalesOrders", is(1)))
+                .andExpect(jsonPath("$.data.todayProductQuantity", is(2)))
                 .andExpect(jsonPath("$.data.trafficTrend", hasSize(7)))
                 .andExpect(jsonPath("$.data.bookingMix[0].name", is("CONFIRMED")))
                 .andExpect(jsonPath("$.data.recentBookings[0].bookingNo", is("BK-SEED-002")));
@@ -108,14 +110,28 @@ class PlatformIntegrationTest {
 
     @Test
     @Order(2)
-    void duplicateBookingIsRejectedByAtomicSlotInventoryUpdate() throws Exception {
+    void duplicateCustomerSlotIsRejectedAndCancellationReleasesTheIdentity() throws Exception {
         MockHttpSession session = authenticatedSession();
         CsrfCredentials csrf = csrf(session);
-        String request = objectMapper.writeValueAsString(Map.of(
+        String missingCustomer = objectMapper.writeValueAsString(Map.of(
                 "spotId", 2,
                 "fishingDate", "2099-12-30",
                 "timeSlot", "MORNING",
-                "guests", 2,
+                "guests", 1));
+        mockMvc.perform(post("/api/bookings")
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content(missingCustomer))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is(
+                        "customerIdentityPresent: 散客预订必须填写顾客姓名和联系电话")));
+        String request = objectMapper.writeValueAsString(Map.of(
+                "contactName", "重复预订顾客",
+                "contactPhone", "13900000001",
+                "spotId", 2,
+                "fishingDate", "2099-12-30",
+                "timeSlot", "MORNING",
+                "guests", 1,
                 "notes", "集成测试"
         ));
 
@@ -125,6 +141,8 @@ class PlatformIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content(request))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.contactName", is("重复预订顾客")))
+                .andExpect(jsonPath("$.data.contactPhone", is("13900000001")))
                 .andExpect(jsonPath("$.data.status", is("CONFIRMED")))
                 .andReturn();
 
@@ -136,9 +154,37 @@ class PlatformIntegrationTest {
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.data").value(nullValue()));
 
+        mockMvc.perform(get("/api/bookings/availability")
+                        .session(session)
+                        .param("date", "2099-12-30")
+                        .param("timeSlot", "MORNING")
+                        .param("spotId", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].reservedCount", is(1)))
+                .andExpect(jsonPath("$.data[0].availableCount", is(1)));
+
         long bookingId = objectMapper.readTree(created.getResponse().getContentAsByteArray())
                 .at("/data/id").asLong();
         mockMvc.perform(post("/api/bookings/{id}/cancel", bookingId)
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token()))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/bookings/{id}/audits", bookingId).session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(2)))
+                .andExpect(jsonPath("$.data[0].action", is("CANCEL")))
+                .andExpect(jsonPath("$.data[1].action", is("CREATE")));
+
+        MvcResult rebooked = mockMvc.perform(post("/api/bookings")
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isCreated())
+                .andReturn();
+        long rebookedId = objectMapper.readTree(rebooked.getResponse().getContentAsByteArray())
+                .at("/data/id").asLong();
+        mockMvc.perform(post("/api/bookings/{id}/cancel", rebookedId)
                         .session(session).cookie(csrf.cookie())
                         .header(csrf.headerName(), csrf.token()))
                 .andExpect(status().isOk());
@@ -232,6 +278,8 @@ class PlatformIntegrationTest {
         MockHttpSession session = authenticatedSession();
         CsrfCredentials csrf = csrf(session);
         String booking = objectMapper.writeValueAsString(Map.of(
+                "contactName", "历史库存顾客",
+                "contactPhone", "13900000002",
                 "spotId", 3,
                 "fishingDate", "2099-12-29",
                 "timeSlot", "EVENING",
@@ -283,6 +331,8 @@ class PlatformIntegrationTest {
         MockHttpSession session = authenticatedSession();
         CsrfCredentials csrf = csrf(session);
         String request = objectMapper.writeValueAsString(Map.of(
+                "contactName", "非标准时段顾客",
+                "contactPhone", "13900000003",
                 "spotId", 1,
                 "fishingDate", "2099-12-28",
                 "timeSlot", "morning",
@@ -307,6 +357,8 @@ class PlatformIntegrationTest {
         CsrfCredentials firstCsrf = csrf(firstSession);
         CsrfCredentials secondCsrf = csrf(secondSession);
         String booking = objectMapper.writeValueAsString(Map.of(
+                "contactName", "并发抢位顾客",
+                "contactPhone", "13900000004",
                 "spotId", 4,
                 "fishingDate", "2099-12-28",
                 "timeSlot", "EVENING",
@@ -349,6 +401,8 @@ class PlatformIntegrationTest {
         MockHttpSession session = authenticatedSession();
         CsrfCredentials csrf = csrf(session);
         String booking = objectMapper.writeValueAsString(Map.of(
+                "contactName", "容量校验顾客",
+                "contactPhone", "13900000005",
                 "spotId", 1,
                 "fishingDate", LocalDate.now(businessClock).toString(),
                 "timeSlot", "MORNING",
@@ -395,6 +449,8 @@ class PlatformIntegrationTest {
         MockHttpSession session = authenticatedSession();
         CsrfCredentials csrf = csrf(session);
         String booking = objectMapper.writeValueAsString(Map.of(
+                "contactName", "分区停用顾客",
+                "contactPhone", "13900000006",
                 "spotId", 1,
                 "fishingDate", "2099-12-27",
                 "timeSlot", "MORNING",
@@ -504,6 +560,8 @@ class PlatformIntegrationTest {
         String today = LocalDate.now(businessClock).toString();
         String cancellableFutureDate = LocalDate.now(businessClock).plusDays(1).toString();
         String bookingRequest = objectMapper.writeValueAsString(Map.of(
+                "contactName", "取消关联顾客",
+                "contactPhone", "13900000007",
                 "spotId", 4,
                 "fishingDate", cancellableFutureDate,
                 "timeSlot", "EVENING",
@@ -567,6 +625,8 @@ class PlatformIntegrationTest {
 
         String futureDate = "2099-12-20";
         String futureBooking = objectMapper.writeValueAsString(Map.of(
+                "contactName", "未来渔获顾客",
+                "contactPhone", "13900000008",
                 "spotId", 4,
                 "fishingDate", futureDate,
                 "timeSlot", "MORNING",
@@ -620,6 +680,8 @@ class PlatformIntegrationTest {
         CsrfCredentials csrf = csrf(session);
         String today = LocalDate.now(businessClock).toString();
         String bookingRequest = objectMapper.writeValueAsString(Map.of(
+                "contactName", "渔获互斥顾客",
+                "contactPhone", "13900000009",
                 "spotId", 4,
                 "fishingDate", today,
                 "timeSlot", "AFTERNOON",
@@ -663,6 +725,8 @@ class PlatformIntegrationTest {
         CsrfCredentials setupCsrf = csrf(setupSession);
         String today = LocalDate.now(businessClock).toString();
         String bookingRequest = objectMapper.writeValueAsString(Map.of(
+                "contactName", "并发渔获顾客",
+                "contactPhone", "13900000010",
                 "spotId", 4,
                 "fishingDate", today,
                 "timeSlot", "MORNING",
@@ -745,6 +809,8 @@ class PlatformIntegrationTest {
                 .at("/data/id").asLong();
         String futureDate = "2099-12-19";
         String bookingRequest = objectMapper.writeValueAsString(Map.of(
+                "contactName", "并发缩容顾客",
+                "contactPhone", "13900000011",
                 "spotId", spotId,
                 "fishingDate", futureDate,
                 "timeSlot", "AFTERNOON",
@@ -1085,6 +1151,15 @@ class PlatformIntegrationTest {
                 .at("/data/id").asLong();
         String futureDate = "2099-12-17";
         String bookingRequest = objectMapper.writeValueAsString(Map.of(
+                "contactName", "扩容顾客甲",
+                "contactPhone", "13900000012",
+                "spotId", spotId,
+                "fishingDate", futureDate,
+                "timeSlot", "MORNING",
+                "guests", 1));
+        String secondBookingRequest = objectMapper.writeValueAsString(Map.of(
+                "contactName", "扩容顾客乙",
+                "contactPhone", "13900000015",
                 "spotId", spotId,
                 "fishingDate", futureDate,
                 "timeSlot", "MORNING",
@@ -1124,7 +1199,7 @@ class PlatformIntegrationTest {
         mockMvc.perform(post("/api/bookings")
                         .session(session).cookie(csrf.cookie())
                         .header(csrf.headerName(), csrf.token())
-                        .contentType(MediaType.APPLICATION_JSON).content(bookingRequest))
+                        .contentType(MediaType.APPLICATION_JSON).content(secondBookingRequest))
                 .andExpect(status().isCreated());
 
         assertEquals(2, jdbcTemplate.queryForObject("""
@@ -1135,6 +1210,232 @@ class PlatformIntegrationTest {
                 SELECT reserved_count FROM fishing_slot_inventory
                 WHERE spot_id = ? AND fishing_date = ? AND time_slot = 'MORNING'
                 """, Integer.class, spotId, LocalDate.parse(futureDate)));
+    }
+
+    @Test
+    @Order(22)
+    void adminSlotConfigurationDrivesBookingPriceAndPaymentLifecycle() throws Exception {
+        MockHttpSession session = authenticatedSession();
+        CsrfCredentials csrf = csrf(session);
+        Long zoneId = jdbcTemplate.queryForObject(
+                "SELECT id FROM fishing_zone WHERE status = 'ACTIVE' ORDER BY id LIMIT 1", Long.class);
+        String spotRequest = objectMapper.writeValueAsString(Map.of(
+                "zoneId", zoneId,
+                "code", "REPORT-SLOT-01",
+                "name", "开题合同验收钓位",
+                "mapX", 41,
+                "mapY", 59,
+                "capacity", 3,
+                "defaultPrice", 65,
+                "status", "OPEN",
+                "note", "收费与时段配置验收"));
+        MvcResult spotCreated = mockMvc.perform(post("/api/spots")
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content(spotRequest))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.defaultPrice", is(65.0)))
+                .andReturn();
+        long spotId = objectMapper.readTree(spotCreated.getResponse().getContentAsByteArray())
+                .at("/data/id").asLong();
+        String fishingDate = LocalDate.now(businessClock).plusDays(40).toString();
+        String slot = objectMapper.writeValueAsString(Map.of(
+                "fishingDate", fishingDate,
+                "timeSlot", "MORNING",
+                "capacity", 2,
+                "price", 80,
+                "status", "AVAILABLE",
+                "expectedVersion", 0));
+        mockMvc.perform(put("/api/bookings/slots/{spotId}", spotId)
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content(slot))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.capacity", is(2)))
+                .andExpect(jsonPath("$.data.price", is(80.0)))
+                .andExpect(jsonPath("$.data.status", is("AVAILABLE")));
+
+        String bookingRequest = objectMapper.writeValueAsString(Map.of(
+                "contactName", "收费验收顾客",
+                "contactPhone", "13900000013",
+                "spotId", spotId,
+                "fishingDate", fishingDate,
+                "timeSlot", "MORNING",
+                "guests", 2));
+        MvcResult bookingCreated = mockMvc.perform(post("/api/bookings")
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content(bookingRequest))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.amount", is(160.0)))
+                .andExpect(jsonPath("$.data.contactName", is("收费验收顾客")))
+                .andExpect(jsonPath("$.data.paymentStatus", is("PENDING")))
+                .andReturn();
+        long bookingId = objectMapper.readTree(bookingCreated.getResponse().getContentAsByteArray())
+                .at("/data/id").asLong();
+        Long paymentId = jdbcTemplate.queryForObject("""
+                SELECT id FROM payment WHERE business_type = 'BOOKING' AND business_id = ?
+                """, Long.class, bookingId);
+        mockMvc.perform(post("/api/payments/{id}/confirm", paymentId)
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"method\":\"CASH\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.businessType", is("BOOKING")))
+                .andExpect(jsonPath("$.data.status", is("PAID")));
+        assertEquals("PAID", jdbcTemplate.queryForObject(
+                "SELECT payment_status FROM booking WHERE id = ?", String.class, bookingId));
+        mockMvc.perform(get("/api/bookings/{id}/audits", bookingId).session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(2)))
+                .andExpect(jsonPath("$.data[0].action", is("PAYMENT_CONFIRM")))
+                .andExpect(jsonPath("$.data[0].afterPaymentStatus", is("PAID")))
+                .andExpect(jsonPath("$.data[1].action", is("CREATE")));
+
+        String afternoonSlot = objectMapper.writeValueAsString(Map.of(
+                "fishingDate", fishingDate,
+                "timeSlot", "AFTERNOON",
+                "capacity", 3,
+                "price", 50,
+                "status", "AVAILABLE",
+                "expectedVersion", 0));
+        mockMvc.perform(put("/api/bookings/slots/{spotId}", spotId)
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content(afternoonSlot))
+                .andExpect(status().isOk());
+        String cancellableRequest = objectMapper.writeValueAsString(Map.of(
+                "contactName", "取消审计顾客",
+                "contactPhone", "13900000014",
+                "spotId", spotId,
+                "fishingDate", fishingDate,
+                "timeSlot", "AFTERNOON",
+                "guests", 1));
+        MvcResult cancellable = mockMvc.perform(post("/api/bookings")
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content(cancellableRequest))
+                .andExpect(status().isCreated()).andReturn();
+        long cancellableId = objectMapper.readTree(cancellable.getResponse().getContentAsByteArray())
+                .at("/data/id").asLong();
+        mockMvc.perform(post("/api/bookings/{id}/cancel", cancellableId)
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.paymentStatus", is("CANCELLED")));
+        assertEquals("CANCELLED", jdbcTemplate.queryForObject("""
+                SELECT status FROM payment WHERE business_type = 'BOOKING' AND business_id = ?
+                """, String.class, cancellableId));
+        mockMvc.perform(get("/api/bookings/{id}/audits", cancellableId).session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(2)))
+                .andExpect(jsonPath("$.data[0].action", is("CANCEL")))
+                .andExpect(jsonPath("$.data[1].action", is("CREATE")));
+    }
+
+    @Test
+    @Order(23)
+    void memberActivityAuditAndCatchFiltersCloseTheReportContract() throws Exception {
+        MockHttpSession session = authenticatedSession();
+        CsrfCredentials csrf = csrf(session);
+        String memberRequest = objectMapper.writeValueAsString(Map.of(
+                "memberNo", "M-REPORT-01",
+                "name", "开题验收会员",
+                "phone", "13900009991",
+                "level", "NORMAL",
+                "points", 10,
+                "status", "ACTIVE"));
+        MvcResult memberCreated = mockMvc.perform(post("/api/members")
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content(memberRequest))
+                .andExpect(status().isCreated()).andReturn();
+        long memberId = objectMapper.readTree(memberCreated.getResponse().getContentAsByteArray())
+                .at("/data/id").asLong();
+        String memberUpdate = objectMapper.writeValueAsString(Map.of(
+                "memberNo", "M-REPORT-01",
+                "name", "开题验收会员",
+                "phone", "13900009991",
+                "level", "SILVER",
+                "points", 30,
+                "status", "ACTIVE"));
+        mockMvc.perform(put("/api/members/{id}", memberId)
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content(memberUpdate))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.level", is("SILVER")));
+
+        Long spotId = jdbcTemplate.queryForObject("""
+                SELECT s.id FROM fishing_spot s
+                JOIN fishing_zone z ON z.id = s.zone_id
+                WHERE s.status = 'OPEN' AND z.status = 'ACTIVE'
+                ORDER BY s.id DESC LIMIT 1
+                """, Long.class);
+        Long zoneId = jdbcTemplate.queryForObject(
+                "SELECT zone_id FROM fishing_spot WHERE id = ?", Long.class, spotId);
+        String catchDate = LocalDate.now(businessClock).toString();
+        String catchRequest = objectMapper.writeValueAsString(Map.of(
+                "memberId", memberId,
+                "spotId", spotId,
+                "fishingDate", catchDate,
+                "timeSlot", "AFTERNOON",
+                "species", "合同验收鲫鱼",
+                "weight", 2.5,
+                "quantity", 3,
+                "notes", "组合筛选验收"));
+        mockMvc.perform(post("/api/catches")
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content(catchRequest))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.timeSlot", is("AFTERNOON")))
+                .andExpect(jsonPath("$.data.zoneId", is(zoneId.intValue())));
+
+        String futureDate = LocalDate.now(businessClock).plusDays(50).toString();
+        String bookingRequest = objectMapper.writeValueAsString(Map.of(
+                "memberId", memberId,
+                "spotId", spotId,
+                "fishingDate", futureDate,
+                "timeSlot", "EVENING",
+                "guests", 1));
+        mockMvc.perform(post("/api/bookings")
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content(bookingRequest))
+                .andExpect(status().isCreated());
+        Long productId = jdbcTemplate.queryForObject("""
+                SELECT id FROM product WHERE status = 'ACTIVE' AND stock_quantity > 0 ORDER BY id LIMIT 1
+                """, Long.class);
+        String saleRequest = objectMapper.writeValueAsString(Map.of(
+                "memberId", memberId,
+                "items", List.of(Map.of("productId", productId, "quantity", 1))));
+        mockMvc.perform(post("/api/sales-orders")
+                        .session(session).cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON).content(saleRequest))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/catches")
+                        .session(session)
+                        .param("date", catchDate)
+                        .param("zoneId", String.valueOf(zoneId))
+                        .param("species", "合同验收鲫鱼")
+                        .param("memberId", String.valueOf(memberId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.data[0].timeSlot", is("AFTERNOON")));
+        mockMvc.perform(get("/api/members/{id}/activity", memberId).session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.member.id", is((int) memberId)))
+                .andExpect(jsonPath("$.data.bookings.length()", is(1)))
+                .andExpect(jsonPath("$.data.catches.length()", is(1)))
+                .andExpect(jsonPath("$.data.salesOrders.length()", is(1)));
+        mockMvc.perform(get("/api/members/{id}/audits", memberId).session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(2)))
+                .andExpect(jsonPath("$.data[0].action", is("UPDATE")))
+                .andExpect(jsonPath("$.data[1].action", is("CREATE")));
     }
 
     private MockHttpSession authenticatedSession() throws Exception {

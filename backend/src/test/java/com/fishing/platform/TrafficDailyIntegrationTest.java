@@ -174,6 +174,8 @@ class TrafficDailyIntegrationTest {
         assertEquals(59, point.get("uniqueVisitors").asInt());
         assertEquals(1, point.get("newMembers").asInt());
         assertEquals(1, point.get("bookingCount").asInt());
+        assertEquals(1, point.get("salesOrderCount").asInt());
+        assertEquals(3, point.get("productQuantity").asInt());
         assertEquals(0, BigDecimal.valueOf(45.50).compareTo(point.get("revenue").decimalValue()));
         assertEquals(0, jdbcTemplate.queryForObject(
                 "SELECT new_members FROM traffic_daily WHERE stat_date = ?", Integer.class, date));
@@ -195,12 +197,24 @@ class TrafficDailyIntegrationTest {
                     (booking_no, spot_id, user_id, fishing_date, time_slot, guests, amount, status, notes)
                 VALUES (?, 1, 1, ?, 'MORNING', 1, 0, 'COMPLETED', '客流事实预约')
                 """, "BK-TRAFFIC-" + index, date);
-        Long paymentId = jdbcTemplate.queryForObject("SELECT COALESCE(MAX(id), 0) + 1 FROM payment", Long.class);
+        String orderNo = "SO-TRAFFIC-" + index;
+        jdbcTemplate.update("""
+                INSERT INTO sales_order
+                    (order_no, total_amount, status, payment_status, created_by, created_at)
+                VALUES (?, 45.50, 'COMPLETED', 'PAID', 1, ?)
+                """, orderNo, date.atTime(10, 0));
+        Long orderId = jdbcTemplate.queryForObject(
+                "SELECT id FROM sales_order WHERE order_no = ?", Long.class, orderNo);
+        jdbcTemplate.update("""
+                INSERT INTO sales_order_item
+                    (order_id, product_id, product_name, quantity, unit_price, line_amount)
+                VALUES (?, 1, '客流事实商品', 3, 15.00, 45.00)
+                """, orderId);
         jdbcTemplate.update("""
                 INSERT INTO payment
                     (payment_no, business_type, business_id, amount, method, status, confirmed_at)
                 VALUES (?, 'SALES_ORDER', ?, ?, 'CASH', 'PAID', ?)
-                """, "PAY-TRAFFIC-" + index, 100000L + index, new BigDecimal("45.50"), date.atTime(10, 0));
+                """, "PAY-TRAFFIC-" + index, orderId, new BigDecimal("45.50"), date.atTime(10, 0));
     }
 
     private JsonNode pointFor(JsonNode series, LocalDate date) {

@@ -49,6 +49,7 @@ export function businessTypeLabel(value?: string): string {
   const key = String(value || '').toUpperCase()
   const labels: Record<string, string> = {
     SALES_ORDER: '销售订单',
+    BOOKING: '垂钓预订',
   }
   return labels[key] || value || '未关联业务'
 }

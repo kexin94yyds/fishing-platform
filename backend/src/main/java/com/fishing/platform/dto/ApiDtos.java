@@ -108,18 +108,38 @@ public final class ApiDtos {
             @DecimalMin(value = "0.00") @jakarta.validation.constraints.DecimalMax("100.00")
             @Digits(integer = 3, fraction = 2) BigDecimal mapY,
             @NotNull @Min(1) Integer capacity,
+            @DecimalMin(value = "0.00") @Digits(integer = 10, fraction = 2) BigDecimal defaultPrice,
             @Pattern(regexp = "OPEN|CLOSED|MAINTENANCE",
                     message = "必须是 OPEN、CLOSED 或 MAINTENANCE") String status,
             @Size(max = 500) String note
     ) {
+        public SpotRequest(Long id, Long zoneId, String code, String name,
+                           BigDecimal mapX, BigDecimal mapY, Integer capacity,
+                           String status, String note) {
+            this(id, zoneId, code, name, mapX, mapY, capacity, BigDecimal.ZERO, status, note);
+        }
+
         @AssertTrue(message = "地图坐标必须同时填写或同时留空")
         public boolean isCoordinatePairValid() {
             return (mapX == null) == (mapY == null);
         }
     }
 
+    public record SlotInventoryRequest(
+            @NotNull LocalDate fishingDate,
+            @NotBlank @Pattern(regexp = "MORNING|AFTERNOON|EVENING",
+                    message = "必须是 MORNING、AFTERNOON 或 EVENING") String timeSlot,
+            @NotNull @Min(1) Integer capacity,
+            @NotNull @DecimalMin(value = "0.00") @Digits(integer = 10, fraction = 2) BigDecimal price,
+            @NotBlank @Pattern(regexp = "AVAILABLE|CLOSED", message = "必须是 AVAILABLE 或 CLOSED") String status,
+            @Min(0) Long expectedVersion
+    ) {
+    }
+
     public record BookingRequest(
             Long memberId,
+            @Size(max = 100) String contactName,
+            @Pattern(regexp = "[0-9+\\- ]{6,32}", message = "联系电话格式不正确") String contactPhone,
             @NotNull Long spotId,
             @NotNull LocalDate fishingDate,
             @NotBlank @Pattern(regexp = "MORNING|AFTERNOON|EVENING",
@@ -128,6 +148,17 @@ public final class ApiDtos {
             @DecimalMin(value = "0.00") @Digits(integer = 10, fraction = 2) BigDecimal amount,
             @Size(max = 500) String notes
     ) {
+        public BookingRequest(Long memberId, Long spotId, LocalDate fishingDate, String timeSlot,
+                              Integer guests, BigDecimal amount, String notes) {
+            this(memberId, null, null, spotId, fishingDate, timeSlot, guests, amount, notes);
+        }
+
+        @AssertTrue(message = "散客预订必须填写顾客姓名和联系电话")
+        public boolean isCustomerIdentityPresent() {
+            return memberId != null
+                    || (contactName != null && !contactName.isBlank()
+                    && contactPhone != null && !contactPhone.isBlank());
+        }
     }
 
     public record CatchCreateRequest(
@@ -135,11 +166,18 @@ public final class ApiDtos {
             @NotNull Long spotId,
             Long memberId,
             @NotNull LocalDate fishingDate,
+            @Pattern(regexp = "MORNING|AFTERNOON|EVENING",
+                    message = "必须是 MORNING、AFTERNOON 或 EVENING") String timeSlot,
             @NotBlank @Size(max = 100) String species,
             @NotNull @DecimalMin(value = "0.00") @Digits(integer = 8, fraction = 2) BigDecimal weight,
             @NotNull @Min(1) Integer quantity,
             @Size(max = 500) String notes
     ) {
+        public CatchCreateRequest(Long bookingId, Long spotId, Long memberId,
+                                  LocalDate fishingDate, String species, BigDecimal weight,
+                                  Integer quantity, String notes) {
+            this(bookingId, spotId, memberId, fishingDate, "MORNING", species, weight, quantity, notes);
+        }
     }
 
     public record CatchUpdateRequest(
@@ -147,6 +185,8 @@ public final class ApiDtos {
             @NotNull Long spotId,
             Long memberId,
             @NotNull LocalDate fishingDate,
+            @Pattern(regexp = "MORNING|AFTERNOON|EVENING",
+                    message = "必须是 MORNING、AFTERNOON 或 EVENING") String timeSlot,
             @NotBlank @Size(max = 100) String species,
             @NotNull @DecimalMin(value = "0.00") @Digits(integer = 8, fraction = 2) BigDecimal weight,
             @NotNull @Min(1) Integer quantity,
@@ -157,6 +197,13 @@ public final class ApiDtos {
             @Pattern(regexp = "RECORDED|VERIFIED|VOID", message = "必须是 RECORDED、VERIFIED 或 VOID") String expectedStatus,
             @NotNull @Min(0) Long expectedVersion
     ) {
+        public CatchUpdateRequest(Long bookingId, Long spotId, Long memberId,
+                                  LocalDate fishingDate, String species, BigDecimal weight,
+                                  Integer quantity, String notes, String status,
+                                  String expectedStatus, Long expectedVersion) {
+            this(bookingId, spotId, memberId, fishingDate, "MORNING", species, weight,
+                    quantity, notes, status, expectedStatus, expectedVersion);
+        }
     }
 
     public record TrafficDailyUpsertRequest(

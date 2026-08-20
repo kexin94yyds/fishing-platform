@@ -45,17 +45,17 @@ public class CatchService {
         this.businessClock = businessClock;
     }
 
-    public List<CatchRecord> findAll() {
-        return mapper.findAll();
+    public List<CatchRecord> findAll(LocalDate date, Long zoneId, String species, Long memberId) {
+        return mapper.findAll(date, zoneId, species == null ? null : species.trim(), memberId);
     }
 
     @Transactional
     public CatchRecord create(CatchCreateRequest request) {
         CatchAssociation association = resolveAssociation(request.bookingId(), request.spotId(),
-                request.memberId(), request.fishingDate());
+                request.memberId(), request.fishingDate(), request.timeSlot());
         String catchNo = BusinessNumbers.next("CR");
         mapper.insert(catchNo, request.bookingId(), association.spotId(), association.memberId(),
-                association.fishingDate(),
+                association.fishingDate(), association.timeSlot(),
                 request.species().trim(), request.weight(), request.quantity(), request.notes(),
                 "RECORDED");
         return mapper.findByNo(catchNo);
@@ -81,17 +81,19 @@ public class CatchService {
             if (!Objects.equals(request.bookingId(), existing.bookingId())
                     || !Objects.equals(request.spotId(), existing.spotId())
                     || !Objects.equals(request.memberId(), existing.memberId())
-                    || !Objects.equals(request.fishingDate(), existing.fishingDate())) {
+                    || !Objects.equals(request.fishingDate(), existing.fishingDate())
+                    || (request.timeSlot() != null && !Objects.equals(request.timeSlot(), existing.timeSlot()))) {
                 throw new BusinessException("作废仅允许修改状态和渔获内容，关联预订、会员、钓位及日期必须保持不变");
             }
             bookingId = existing.bookingId();
-            association = new CatchAssociation(existing.spotId(), existing.memberId(), existing.fishingDate());
+            association = new CatchAssociation(
+                    existing.spotId(), existing.memberId(), existing.fishingDate(), existing.timeSlot());
         } else {
             association = resolveAssociation(request.bookingId(), request.spotId(),
-                    request.memberId(), request.fishingDate());
+                    request.memberId(), request.fishingDate(), request.timeSlot());
         }
         int changed = mapper.update(id, bookingId, association.spotId(), association.memberId(),
-                association.fishingDate(), request.species().trim(), request.weight(), request.quantity(),
+                association.fishingDate(), association.timeSlot(), request.species().trim(), request.weight(), request.quantity(),
                 request.notes(), status, request.expectedStatus(), request.expectedVersion());
         if (changed == 0) {
             throw new BusinessException("渔获记录已被其他操作修改，请刷新后重试");
@@ -116,11 +118,13 @@ public class CatchService {
     private CatchAssociation resolveAssociation(Long bookingId,
                                                  Long spotId,
                                                  Long memberId,
-                                                 LocalDate fishingDate) {
+                                                 LocalDate fishingDate,
+                                                 String timeSlot) {
         if (bookingId == null) {
             rejectFutureCatch(fishingDate);
             validateStandaloneAssociation(memberId, spotId);
-            return new CatchAssociation(spotId, memberId, fishingDate);
+            return new CatchAssociation(spotId, memberId, fishingDate,
+                    timeSlot == null || timeSlot.isBlank() ? "MORNING" : timeSlot);
         }
         if (bookingMapper.lockById(bookingId) == null) {
             throw new NotFoundException("关联预订不存在");
@@ -130,7 +134,8 @@ public class CatchService {
             throw new BusinessException("已取消或无效的预订不能用于渔获登记");
         }
         rejectFutureCatch(booking.fishingDate());
-        return new CatchAssociation(booking.spotId(), booking.memberId(), booking.fishingDate());
+        return new CatchAssociation(
+                booking.spotId(), booking.memberId(), booking.fishingDate(), booking.timeSlot());
     }
 
     private void validateStandaloneAssociation(Long memberId, Long spotId) {
@@ -159,6 +164,6 @@ public class CatchService {
         }
     }
 
-    private record CatchAssociation(Long spotId, Long memberId, LocalDate fishingDate) {
+    private record CatchAssociation(Long spotId, Long memberId, LocalDate fishingDate, String timeSlot) {
     }
 }

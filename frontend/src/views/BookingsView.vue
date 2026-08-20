@@ -2,20 +2,21 @@
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { Plus, Refresh, Search, Setting } from '@element-plus/icons-vue'
 import ResourceState from '@/components/ResourceState.vue'
+import LakeEmptyState from '@/components/LakeEmptyState.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { bookingApi, memberApi, spotApi } from '@/api'
 import { errorMessage } from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
-import { formatCurrency, formatDate, timeSlotLabel } from '@/utils/format'
+import { formatCurrency, formatDate, formatDateTime, statusLabel, timeSlotLabel } from '@/utils/format'
 import {
   businessDateValue,
   calendarDateValue,
   utcDateFromValue,
   utcDateValue,
 } from '@/utils/businessTime'
-import type { Availability, Booking, Id, Member, Spot } from '@/types'
+import type { Availability, Booking, BookingAudit, Id, Member, Spot } from '@/types'
 
 const auth = useAuthStore()
 const canSettleBookings = computed(() => auth.isAdmin)
@@ -28,9 +29,16 @@ const availability = ref<Availability[]>([])
 const availabilityChecked = ref(false)
 const dialogOpen = ref(false)
 const saving = ref(false)
+const slotDialogOpen = ref(false)
+const slotSaving = ref(false)
+const slotLoading = ref(false)
 const checkingAvailability = ref(false)
 const settlingId = ref<Id | null>(null)
 const settlingAction = ref<'complete' | 'noShow' | null>(null)
+const auditDialogOpen = ref(false)
+const auditLoading = ref(false)
+const auditBooking = ref<Booking | null>(null)
+const bookingAudits = ref<BookingAudit[]>([])
 const formRef = ref<FormInstance>()
 const formShellRef = ref<HTMLElement>()
 
@@ -50,6 +58,8 @@ const slotOptions = [
 
 type BookingForm = {
   memberId: Id | ''
+  contactName: string
+  contactPhone: string
   spotId: Id | ''
   fishingDate: string
   timeSlot: string
@@ -60,6 +70,8 @@ type BookingForm = {
 
 const form = reactive<BookingForm>({
   memberId: '',
+  contactName: '',
+  contactPhone: '',
   spotId: '',
   fishingDate: '',
   timeSlot: 'MORNING',
@@ -68,7 +80,37 @@ const form = reactive<BookingForm>({
   notes: '',
 })
 
+const slotForm = reactive({
+  spotId: '' as Id | '',
+  fishingDate: businessDateValue(),
+  timeSlot: 'MORNING',
+  capacity: 1,
+  price: 0,
+  status: 'AVAILABLE' as 'AVAILABLE' | 'CLOSED',
+  expectedVersion: 0,
+})
+
 const rules: FormRules = {
+  contactName: [
+    {
+      validator: (_rule, value, callback) => {
+        if (!form.memberId && !String(value || '').trim()) callback(new Error('请填写散客姓名'))
+        else callback()
+      },
+      trigger: 'blur',
+    },
+  ],
+  contactPhone: [
+    {
+      validator: (_rule, value, callback) => {
+        if (form.memberId) callback()
+        else if (!String(value || '').trim()) callback(new Error('请填写散客联系电话'))
+        else if (!/^[0-9+\- ]{6,32}$/.test(String(value))) callback(new Error('联系电话格式不正确'))
+        else callback()
+      },
+      trigger: 'blur',
+    },
+  ],
   spotId: [{ required: true, message: '请选择钓位', trigger: 'change' }],
   fishingDate: [{ required: true, message: '请选择垂钓日期', trigger: 'change' }],
   timeSlot: [{ required: true, message: '请选择时段', trigger: 'change' }],
@@ -112,7 +154,7 @@ const selectedMobileDay = computed(
 const visibleBookings = computed(() => {
   const query = filters.keyword.trim().toLowerCase()
   return bookings.value.filter((booking) => {
-    const text = `${booking.bookingNo || ''} ${booking.memberName || ''} ${booking.spotName || ''}`.toLowerCase()
+    const text = `${booking.bookingNo || ''} ${booking.memberName || ''} ${booking.contactName || ''} ${booking.contactPhone || ''} ${booking.spotName || ''}`.toLowerCase()
     return (
       (!query || text.includes(query)) &&
       (!filters.status || booking.status === filters.status)
@@ -188,6 +230,8 @@ function openCreate(fishingDate = '', timeSlot = 'MORNING') {
   }
   Object.assign(form, {
     memberId: '',
+    contactName: '',
+    contactPhone: '',
     spotId: '',
     fishingDate,
     timeSlot,
@@ -239,6 +283,84 @@ function handleGuestsChange() {
     form.spotId = ''
     ElMessage.warning('到场人数已超过原钓位余量，请重新选择钓位')
   }
+  updateAmountFromConfiguredPrice()
+}
+
+function updateAmountFromConfiguredPrice() {
+  const selected = availability.value.find(
+    (item) => String(item.spotId) === String(form.spotId),
+  )
+  if (selected?.price !== undefined) {
+    form.amount = Number(selected.price) * Number(form.guests || 1)
+  }
+}
+
+function handleSpotChange() {
+  updateAmountFromConfiguredPrice()
+}
+
+async function hydrateSlotConfiguration() {
+  if (!slotForm.spotId || !slotForm.fishingDate || !slotForm.timeSlot) return
+  slotLoading.value = true
+  try {
+    const result = await bookingApi.availability({
+      date: slotForm.fishingDate,
+      timeSlot: slotForm.timeSlot,
+      spotId: slotForm.spotId,
+    })
+    const current = result.records[0]
+    const spot = spots.value.find((item) => String(item.id) === String(slotForm.spotId))
+    slotForm.capacity = Number(current?.capacity ?? spot?.capacity ?? 1)
+    slotForm.price = Number(current?.price ?? spot?.defaultPrice ?? 0)
+    slotForm.status = current?.status === 'CLOSED' ? 'CLOSED' : 'AVAILABLE'
+    slotForm.expectedVersion = Number(current?.version ?? 0)
+  } catch (reason) {
+    ElMessage.error(errorMessage(reason))
+  } finally {
+    slotLoading.value = false
+  }
+}
+
+function openSlotConfiguration(fishingDate = firstSchedulableDate.value, timeSlot = 'MORNING') {
+  Object.assign(slotForm, {
+    spotId: spots.value[0]?.id ?? '',
+    fishingDate,
+    timeSlot,
+    capacity: spots.value[0]?.capacity ?? 1,
+    price: Number(spots.value[0]?.defaultPrice ?? 0),
+    status: 'AVAILABLE',
+    expectedVersion: 0,
+  })
+  slotDialogOpen.value = true
+  void hydrateSlotConfiguration()
+}
+
+async function saveSlotConfiguration() {
+  if (!slotForm.spotId || !slotForm.fishingDate || !slotForm.timeSlot) {
+    ElMessage.warning('请选择钓位、日期和时段')
+    return
+  }
+  slotSaving.value = true
+  try {
+    await bookingApi.configureSlot(slotForm.spotId, {
+      fishingDate: slotForm.fishingDate,
+      timeSlot: slotForm.timeSlot,
+      capacity: slotForm.capacity,
+      price: slotForm.price,
+      status: slotForm.status,
+      expectedVersion: slotForm.expectedVersion,
+    })
+    ElMessage.success('时段容量、价格和开放状态已保存')
+    slotDialogOpen.value = false
+    if (form.fishingDate === slotForm.fishingDate && form.timeSlot === slotForm.timeSlot) {
+      await checkAvailability()
+    }
+  } catch (reason) {
+    ElMessage.error(errorMessage(reason))
+    await hydrateSlotConfiguration()
+  } finally {
+    slotSaving.value = false
+  }
 }
 
 async function focusFirstInvalidField() {
@@ -272,6 +394,8 @@ async function save() {
   try {
     await bookingApi.create({
       memberId: form.memberId || undefined,
+      contactName: form.memberId ? undefined : form.contactName.trim(),
+      contactPhone: form.memberId ? undefined : form.contactPhone.trim(),
       spotId: form.spotId,
       fishingDate: form.fishingDate,
       timeSlot: form.timeSlot,
@@ -287,6 +411,35 @@ async function save() {
   } finally {
     saving.value = false
   }
+}
+
+function handleMemberChange() {
+  formRef.value?.clearValidate(['contactName', 'contactPhone'])
+}
+
+async function openBookingAudits(booking: Booking) {
+  auditBooking.value = booking
+  bookingAudits.value = []
+  auditDialogOpen.value = true
+  auditLoading.value = true
+  try {
+    bookingAudits.value = (await bookingApi.audits(booking.id, 50)).records
+  } catch (reason) {
+    ElMessage.error(errorMessage(reason))
+  } finally {
+    auditLoading.value = false
+  }
+}
+
+function bookingAuditLabel(action: string) {
+  const labels: Record<string, string> = {
+    CREATE: '创建预订',
+    CANCEL: '取消预订',
+    COMPLETED: '完成结单',
+    NO_SHOW: '标记爽约',
+    PAYMENT_CONFIRM: '确认收款',
+  }
+  return labels[action] || action
 }
 
 async function cancelBooking(booking: Booking) {
@@ -371,6 +524,9 @@ onMounted(load)
           @change="handleWeekChange"
         />
         <el-button :icon="Refresh" :loading="loading" @click="load">刷新本周</el-button>
+        <el-button v-if="auth.isAdmin" :icon="Setting" @click="openSlotConfiguration()">
+          时段配置
+        </el-button>
         <el-button type="primary" :icon="Plus" @click="openCreate()">新增预订</el-button>
       </div>
     </header>
@@ -380,8 +536,8 @@ onMounted(load)
         v-model="filters.keyword"
         :prefix-icon="Search"
         clearable
-        placeholder="查订单、会员或钓位"
-        aria-label="搜索订单、会员或钓位"
+        placeholder="查订单、顾客或钓位"
+        aria-label="搜索订单、顾客或钓位"
         style="width: 230px"
       />
       <el-select
@@ -457,7 +613,7 @@ onMounted(load)
                       :class="{ cancelled: booking.status === 'CANCELLED' }"
                     >
                       <span>{{ booking.spotName || '待安排钓位' }}</span>
-                      <strong>{{ booking.memberName || '散客' }}</strong>
+                      <strong>{{ booking.memberName || booking.contactName || '散客' }}</strong>
                       <small>{{ booking.guests }} 人</small>
                     </button>
                   </template>
@@ -465,7 +621,12 @@ onMounted(load)
                     <strong>{{ booking.bookingNo || booking.id }}</strong>
                     <p>{{ formatDate(booking.fishingDate) }} {{ timeSlotLabel(booking.timeSlot) }}</p>
                     <p>{{ formatCurrency(booking.amount) }}</p>
+                    <p>{{ booking.contactName || booking.memberName || '散客' }}<span v-if="booking.contactPhone"> · {{ booking.contactPhone }}</span></p>
+                    <p class="payment-state">收费：<StatusTag :status="booking.paymentStatus || 'PENDING'" /></p>
                     <StatusTag :status="booking.status" />
+                    <el-button v-if="auth.isAdmin" link type="primary" @click="openBookingAudits(booking)">
+                      操作记录
+                    </el-button>
                     <el-button
                       link
                       type="danger"
@@ -576,7 +737,7 @@ onMounted(load)
                     :class="{ cancelled: booking.status === 'CANCELLED' }"
                   >
                     <span>{{ booking.spotName || '待安排钓位' }}</span>
-                    <strong>{{ booking.memberName || '散客' }}</strong>
+                    <strong>{{ booking.memberName || booking.contactName || '散客' }}</strong>
                     <small>{{ booking.guests }} 人</small>
                   </button>
                 </template>
@@ -584,7 +745,12 @@ onMounted(load)
                   <strong>{{ booking.bookingNo || booking.id }}</strong>
                   <p>{{ formatDate(booking.fishingDate) }} {{ timeSlotLabel(booking.timeSlot) }}</p>
                   <p>{{ formatCurrency(booking.amount) }}</p>
+                  <p>{{ booking.contactName || booking.memberName || '散客' }}<span v-if="booking.contactPhone"> · {{ booking.contactPhone }}</span></p>
+                  <p class="payment-state">收费：<StatusTag :status="booking.paymentStatus || 'PENDING'" /></p>
                   <StatusTag :status="booking.status" />
+                  <el-button v-if="auth.isAdmin" link type="primary" @click="openBookingAudits(booking)">
+                    操作记录
+                  </el-button>
                   <el-button
                     link
                     type="danger"
@@ -657,6 +823,7 @@ onMounted(load)
                 filterable
                 placeholder="不选择则按散客登记"
                 style="width: 100%"
+                @change="handleMemberChange"
               >
                 <el-option
                   v-for="member in members"
@@ -665,6 +832,12 @@ onMounted(load)
                   :value="member.id"
                 />
               </el-select>
+            </el-form-item>
+            <el-form-item v-if="!form.memberId" label="散客姓名" prop="contactName">
+              <el-input v-model="form.contactName" maxlength="100" placeholder="请填写顾客姓名" />
+            </el-form-item>
+            <el-form-item v-if="!form.memberId" label="联系电话" prop="contactPhone">
+              <el-input v-model="form.contactPhone" maxlength="32" placeholder="请填写手机号或联系电话" />
             </el-form-item>
             <el-form-item label="到场人数" prop="guests">
               <el-input-number
@@ -710,6 +883,7 @@ onMounted(load)
                       : '当前时段暂无满足人数的钓位'
                 "
                 style="width: 100%"
+                @change="handleSpotChange"
               >
                 <el-option
                   v-for="spot in availableSpots"
@@ -745,6 +919,116 @@ onMounted(load)
           </div>
         </el-form>
       </div>
+    </el-dialog>
+
+    <el-dialog
+      v-if="auth.isAdmin"
+      v-model="auditDialogOpen"
+      :title="`预订操作记录 · ${auditBooking?.bookingNo || ''}`"
+      width="min(620px, calc(100vw - 32px))"
+      destroy-on-close
+    >
+      <div v-loading="auditLoading" class="booking-audit-list">
+        <LakeEmptyState
+          v-if="!auditLoading && !bookingAudits.length"
+          title="暂无操作记录"
+          description="创建、取消、结单或确认收款后会留下轨迹"
+          compact
+        />
+        <article v-for="audit in bookingAudits" :key="audit.id">
+          <div>
+            <strong>{{ bookingAuditLabel(audit.action) }}</strong>
+            <span>{{ audit.actorUsername }}</span>
+          </div>
+          <p>
+            预订：{{ statusLabel(audit.beforeStatus || '') }} → {{ statusLabel(audit.afterStatus || '') }}
+          </p>
+          <p>
+            收费：{{ statusLabel(audit.beforePaymentStatus || '') }} → {{ statusLabel(audit.afterPaymentStatus || '') }}
+          </p>
+          <time>{{ formatDateTime(audit.createdAt) }}</time>
+        </article>
+      </div>
+    </el-dialog>
+
+    <el-dialog
+      v-if="auth.isAdmin"
+      v-model="slotDialogOpen"
+      title="配置开放日期与时段"
+      width="620px"
+      destroy-on-close
+    >
+      <el-form :model="slotForm" label-position="top" v-loading="slotLoading">
+        <div class="form-grid">
+          <el-form-item label="钓位">
+            <el-select
+              v-model="slotForm.spotId"
+              filterable
+              style="width: 100%"
+              @change="hydrateSlotConfiguration"
+            >
+              <el-option
+                v-for="spot in spots"
+                :key="spot.id"
+                :label="`${spot.zoneName || ''} ${spot.name}`"
+                :value="spot.id"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="开放日期">
+            <el-date-picker
+              v-model="slotForm.fishingDate"
+              type="date"
+              value-format="YYYY-MM-DD"
+              :disabled-date="disablePastDate"
+              style="width: 100%"
+              @change="hydrateSlotConfiguration"
+            />
+          </el-form-item>
+          <el-form-item label="时段">
+            <el-select
+              v-model="slotForm.timeSlot"
+              style="width: 100%"
+              @change="hydrateSlotConfiguration"
+            >
+              <el-option
+                v-for="slot in slotOptions"
+                :key="slot.value"
+                :label="slot.label"
+                :value="slot.value"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="开放状态">
+            <el-select v-model="slotForm.status" style="width: 100%">
+              <el-option label="开放" value="AVAILABLE" />
+              <el-option label="关闭" value="CLOSED" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="时段容量">
+            <el-input-number
+              v-model="slotForm.capacity"
+              :min="1"
+              controls-position="right"
+            />
+          </el-form-item>
+          <el-form-item label="时段价格（元/人）">
+            <el-input-number
+              v-model="slotForm.price"
+              :min="0"
+              :precision="2"
+              :step="10"
+              controls-position="right"
+            />
+          </el-form-item>
+        </div>
+      </el-form>
+      <template #footer>
+        <el-button @click="slotDialogOpen = false">取消</el-button>
+        <el-button type="primary" :loading="slotSaving" @click="saveSlotConfiguration">
+          保存配置
+        </el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -1061,6 +1345,39 @@ onMounted(load)
 
 .dialog-actions .el-button + .el-button {
   margin-left: 0;
+}
+
+.booking-audit-list {
+  min-height: 120px;
+}
+
+.booking-audit-list article {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(150px, 1.2fr) auto;
+  gap: 8px 16px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--paper-300);
+}
+
+.booking-audit-list article > div,
+.booking-audit-list article p {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+}
+
+.booking-audit-list article span,
+.booking-audit-list article p,
+.booking-audit-list article time {
+  color: var(--ink-500);
+  font-size: 11px;
+}
+
+@media (max-width: 620px) {
+  .booking-audit-list article {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (pointer: coarse) {

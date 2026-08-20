@@ -10,6 +10,7 @@ import com.fishing.platform.mapper.ZoneMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
@@ -42,6 +43,7 @@ public class SpotService {
         }
         mapper.insert(request.zoneId(), request.code().trim(), request.name().trim(),
                 request.mapX(), request.mapY(), request.capacity(),
+                request.defaultPrice() == null ? BigDecimal.ZERO : request.defaultPrice(),
                 request.status() == null ? "OPEN" : request.status(), request.note());
         return mapper.findByCode(request.code().trim());
     }
@@ -68,6 +70,7 @@ public class SpotService {
         int changed = mapper.updateIfCapacityAllows(
                 id, request.zoneId(), request.code().trim(), request.name().trim(),
                 request.mapX(), request.mapY(), request.capacity(),
+                request.defaultPrice() == null ? existing.defaultPrice() : request.defaultPrice(),
                 targetStatus, request.note(), today);
         if (changed == 0) {
             int occupied = mapper.maximumActiveReservationCount(id, today);

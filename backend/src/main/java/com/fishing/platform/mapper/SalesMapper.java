@@ -22,6 +22,9 @@ public interface SalesMapper {
     @Select(ORDER_SELECT + " ORDER BY o.created_at DESC, o.id DESC")
     List<SalesOrder> findAll();
 
+    @Select(ORDER_SELECT + " WHERE o.member_id = #{memberId} ORDER BY o.created_at DESC, o.id DESC")
+    List<SalesOrder> findByMemberId(@Param("memberId") Long memberId);
+
     @Select(ORDER_SELECT + " WHERE o.id = #{id}")
     SalesOrder findById(@Param("id") Long id);
 

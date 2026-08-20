@@ -2,6 +2,8 @@ package com.fishing.platform.controller;
 
 import com.fishing.platform.common.ApiResponse;
 import com.fishing.platform.domain.DomainModels.Member;
+import com.fishing.platform.domain.DomainModels.MemberActivity;
+import com.fishing.platform.domain.DomainModels.MemberAudit;
 import com.fishing.platform.dto.ApiDtos.MemberRequest;
 import com.fishing.platform.service.MemberService;
 import jakarta.validation.Valid;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -32,6 +35,18 @@ public class MemberController {
     @GetMapping
     public ApiResponse<List<Member>> list() {
         return ApiResponse.ok(service.findAll());
+    }
+
+    @GetMapping("/{id}/activity")
+    public ApiResponse<MemberActivity> activity(@PathVariable @Positive Long id) {
+        return ApiResponse.ok(service.activity(id));
+    }
+
+    @GetMapping("/{id}/audits")
+    public ApiResponse<List<MemberAudit>> audits(
+            @PathVariable @Positive Long id,
+            @RequestParam(defaultValue = "20") @Positive int limit) {
+        return ApiResponse.ok(service.audits(id, limit));
     }
 
     @PostMapping

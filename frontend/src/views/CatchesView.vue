@@ -8,7 +8,7 @@ import LakeEmptyState from '@/components/LakeEmptyState.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { bookingApi, catchApi, memberApi, spotApi } from '@/api'
 import { errorMessage } from '@/api/http'
-import { formatDate, formatNumber } from '@/utils/format'
+import { formatDate, formatNumber, timeSlotLabel } from '@/utils/format'
 import { focusFirstInvalid } from '@/utils/forms'
 import { businessDateValue, calendarDateValue } from '@/utils/businessTime'
 import type {
@@ -33,6 +33,9 @@ const formRef = ref<FormInstance>()
 const keyword = ref('')
 const statusFilter = ref('')
 const speciesFilter = ref('')
+const dateFilter = ref('')
+const zoneFilter = ref<Id | ''>('')
+const memberFilter = ref<Id | ''>('')
 
 type CatchForm = {
   id?: Id
@@ -43,6 +46,7 @@ type CatchForm = {
   weight: number
   quantity: number
   fishingDate: string
+  timeSlot: string
   status: string
   notes: string
 }
@@ -55,6 +59,7 @@ const form = reactive<CatchForm>({
   weight: 0,
   quantity: 1,
   fishingDate: '',
+  timeSlot: 'MORNING',
   status: 'RECORDED',
   notes: '',
 })
@@ -65,6 +70,7 @@ const rules: FormRules = {
   weight: [{ required: true, message: '请输入渔获重量', trigger: 'change' }],
   quantity: [{ required: true, message: '请输入渔获数量', trigger: 'change' }],
   fishingDate: [{ required: true, message: '请选择垂钓日期', trigger: 'change' }],
+  timeSlot: [{ required: true, message: '请选择垂钓时段', trigger: 'change' }],
 }
 
 const visibleRecords = computed(() => {
@@ -75,7 +81,10 @@ const visibleRecords = computed(() => {
     return (
       (!query || text.includes(query)) &&
       (!statusFilter.value || record.status === statusFilter.value) &&
-      (!speciesFilter.value || record.species === speciesFilter.value)
+      (!speciesFilter.value || record.species === speciesFilter.value) &&
+      (!dateFilter.value || record.fishingDate === dateFilter.value) &&
+      (!zoneFilter.value || String(record.zoneId) === String(zoneFilter.value)) &&
+      (!memberFilter.value || String(record.memberId) === String(memberFilter.value))
     )
   })
 })
@@ -112,6 +121,7 @@ const originalAssociation = ref<{
   memberId: Id | ''
   spotId: Id | ''
   fishingDate: string
+  timeSlot: string
 } | null>(null)
 const voidAssociationLocked = computed(
   () => form.id !== undefined && (form.status === 'VOID' || originalStatus.value === 'VOID'),
@@ -119,6 +129,15 @@ const voidAssociationLocked = computed(
 const associationLocked = computed(() => bookingLinked.value || voidAssociationLocked.value)
 const activeMembers = computed(() => members.value.filter((member) => member.status === 'ACTIVE'))
 const openSpots = computed(() => spots.value.filter((spot) => spot.status === 'OPEN'))
+const zoneOptions = computed(() => {
+  const zones = new Map<string, { id: Id; name: string }>()
+  spots.value.forEach((spot) => {
+    if (spot.zoneId !== undefined) {
+      zones.set(String(spot.zoneId), { id: spot.zoneId, name: spot.zoneName || `分区 ${spot.zoneId}` })
+    }
+  })
+  return [...zones.values()]
+})
 const statusOptions = computed(() => {
   if (form.id === undefined) return [{ label: '已登记', value: 'RECORDED' }]
   if (originalStatus.value === 'VOID') return [{ label: '已作废', value: 'VOID' }]
@@ -203,6 +222,7 @@ function openForm(record?: CatchRecord) {
         memberId: record.memberId ?? '',
         spotId: record.spotId,
         fishingDate: record.fishingDate,
+        timeSlot: record.timeSlot,
       }
     : null
   Object.assign(form, {
@@ -214,6 +234,7 @@ function openForm(record?: CatchRecord) {
     weight: record?.weight ?? 0,
     quantity: record?.quantity ?? 1,
     fishingDate: record?.fishingDate ?? '',
+    timeSlot: record?.timeSlot ?? 'MORNING',
     status: record?.status ?? 'RECORDED',
     notes: record?.notes ?? '',
   })
@@ -231,6 +252,7 @@ function applyBooking(bookingId: Id | '') {
   form.spotId = booking.spotId
   form.memberId = booking.memberId ?? ''
   form.fishingDate = booking.fishingDate
+  form.timeSlot = booking.timeSlot
 }
 
 async function save() {
@@ -267,6 +289,7 @@ async function save() {
       weight: form.weight,
       quantity: form.quantity,
       fishingDate: form.fishingDate,
+      timeSlot: form.timeSlot,
       notes: form.notes,
     }
     if (form.id !== undefined) {
@@ -366,6 +389,34 @@ onMounted(load)
               <el-option label="已核验" value="VERIFIED" />
               <el-option label="已作废" value="VOID" />
             </el-select>
+            <el-date-picker
+              v-model="dateFilter"
+              type="date"
+              value-format="YYYY-MM-DD"
+              clearable
+              placeholder="全部日期"
+              aria-label="按垂钓日期筛选"
+              style="width: 150px"
+            />
+            <el-select
+              v-model="zoneFilter"
+              clearable
+              placeholder="全部钓区"
+              aria-label="按钓区筛选"
+              style="width: 140px"
+            >
+              <el-option v-for="zone in zoneOptions" :key="zone.id" :label="zone.name" :value="zone.id" />
+            </el-select>
+            <el-select
+              v-model="memberFilter"
+              clearable
+              filterable
+              placeholder="全部会员"
+              aria-label="按会员筛选"
+              style="width: 150px"
+            >
+              <el-option v-for="member in members" :key="member.id" :label="member.name" :value="member.id" />
+            </el-select>
             <span>
               <b v-if="speciesFilter">{{ speciesFilter }} · </b>
               筛选后 {{ visibleRecords.length }} 笔
@@ -397,11 +448,15 @@ onMounted(load)
                 </div>
                 <div>
                   <dt>钓位</dt>
-                  <dd>{{ record.spotName || '暂无' }}</dd>
+                  <dd>{{ record.zoneName || '未分区' }} · {{ record.spotName || '暂无' }}</dd>
                 </div>
                 <div>
                   <dt>归属</dt>
                   <dd>{{ record.memberName || '散客' }}</dd>
+                </div>
+                <div>
+                  <dt>时段</dt>
+                  <dd>{{ timeSlotLabel(record.timeSlot) }}</dd>
                 </div>
               </dl>
               <footer>
@@ -453,8 +508,8 @@ onMounted(load)
           <el-alert
             v-if="associationLocked"
             class="form-span-2"
-            :title="voidAssociationLocked ? '作废仅改变档案状态，关联信息保持不变' : '会员、钓位和日期已按关联预订锁定'"
-            :description="voidAssociationLocked ? '关联预订、会员、钓位和日期不可在作废时修改。' : '如需单独调整这些信息，请先清空关联预订。'"
+            :title="voidAssociationLocked ? '作废仅改变档案状态，关联信息保持不变' : '会员、钓位、日期和时段已按关联预订锁定'"
+            :description="voidAssociationLocked ? '关联预订、会员、钓位、日期和时段不可在作废时修改。' : '如需单独调整这些信息，请先清空关联预订。'"
             type="info"
             :closable="false"
             show-icon
@@ -504,6 +559,18 @@ onMounted(load)
               placeholder="请选择日期…"
               style="width: 100%"
             />
+          </el-form-item>
+          <el-form-item label="垂钓时段" prop="timeSlot">
+            <el-select
+              v-model="form.timeSlot"
+              :disabled="associationLocked"
+              aria-label="垂钓时段"
+              style="width: 100%"
+            >
+              <el-option label="上午" value="MORNING" />
+              <el-option label="下午" value="AFTERNOON" />
+              <el-option label="夜钓" value="EVENING" />
+            </el-select>
           </el-form-item>
           <el-form-item label="渔获品种" prop="species">
             <el-input v-model.trim="form.species" name="species" placeholder="例如 鲫鱼…" />

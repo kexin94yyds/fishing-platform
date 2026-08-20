@@ -46,6 +46,8 @@ public class AnalyticsService {
                 .forEach(point -> trafficByDate.put(point.statDate(), point));
         Map<LocalDate, Long> membersByDate = countsByDate(mapper.newMembers(startDate));
         Map<LocalDate, Long> bookingsByDate = countsByDate(mapper.bookings(startDate));
+        Map<LocalDate, Long> salesOrdersByDate = countsByDate(mapper.salesOrders(startDate));
+        Map<LocalDate, Long> productQuantitiesByDate = countsByDate(mapper.productQuantities(startDate));
         Map<LocalDate, BigDecimal> revenueByDate = new HashMap<>();
         mapper.revenue(startDate)
                 .forEach(point -> revenueByDate.put(point.statDate(), point.metricValue()));
@@ -62,6 +64,8 @@ public class AnalyticsService {
                             uniqueVisitors,
                             Math.toIntExact(membersByDate.getOrDefault(date, 0L)),
                             Math.toIntExact(bookingsByDate.getOrDefault(date, 0L)),
+                            Math.toIntExact(salesOrdersByDate.getOrDefault(date, 0L)),
+                            Math.toIntExact(productQuantitiesByDate.getOrDefault(date, 0L)),
                             revenueByDate.getOrDefault(date, BigDecimal.ZERO));
                 })
                 .toList();

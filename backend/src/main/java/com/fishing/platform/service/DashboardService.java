@@ -35,6 +35,10 @@ public class DashboardService {
         result.put("lowStockProducts", mapper.lowStockProducts());
         result.put("todayCatchCount", mapper.todayCatchCount(today));
         result.put("pendingPayments", mapper.pendingPayments());
+        result.put("todaySalesOrders", mapper.todaySalesOrders(
+                today.atStartOfDay(), today.plusDays(1).atStartOfDay()));
+        result.put("todayProductQuantity", mapper.todayProductQuantity(
+                today.atStartOfDay(), today.plusDays(1).atStartOfDay()));
 
         var trafficSeries = analyticsService.trafficSeries(7);
         result.put("visitorsToday", trafficSeries.get(trafficSeries.size() - 1).visits());

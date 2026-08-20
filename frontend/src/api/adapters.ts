@@ -83,6 +83,8 @@ export function toDashboard(payload: unknown): DashboardSummary {
     memberTotal: asNumber(first(metrics, ['memberTotal', 'activeMembers', 'members', 'memberCount'])),
     lowStockProducts: asNumber(first(metrics, ['lowStockProducts', 'lowStockCount'])),
     todayCatchCount: asNumber(first(metrics, ['todayCatchCount', 'catchesToday'])),
+    todaySalesOrders: asNumber(first(metrics, ['todaySalesOrders', 'salesOrdersToday'])),
+    todayProductQuantity: asNumber(first(metrics, ['todayProductQuantity', 'productsSoldToday'])),
     trafficTrend: toTrend(first(value, ['trafficTrend', 'trend', 'visitorTrend'])),
     bookingMix: toNamedValues(first(value, ['bookingMix', 'bookingStatus', 'statusDistribution'])),
     recentBookings: Array.isArray(recent) ? (recent as RecentBooking[]) : [],
@@ -98,6 +100,8 @@ export function toTraffic(payload: unknown): TrafficAnalytics {
     uniqueVisitors: asNumber(first(item, ['uniqueVisitors'])) ?? 0,
     newMembers: asNumber(first(item, ['newMembers'])) ?? 0,
     bookingCount: asNumber(first(item, ['bookingCount', 'bookings'])) ?? 0,
+    salesOrderCount: asNumber(first(item, ['salesOrderCount', 'salesOrders'])) ?? 0,
+    productQuantity: asNumber(first(item, ['productQuantity', 'productsSold'])) ?? 0,
     revenue: asNumber(first(item, ['revenue', 'amount'])) ?? 0,
   }))
   const sum = (selector: (point: TrafficPoint) => number) =>
@@ -111,6 +115,8 @@ export function toTraffic(payload: unknown): TrafficAnalytics {
       : null,
     newMembers: series.length ? sum((point) => point.newMembers) : null,
     bookingCount: series.length ? sum((point) => point.bookingCount) : null,
+    salesOrderCount: series.length ? sum((point) => point.salesOrderCount) : null,
+    productQuantity: series.length ? sum((point) => point.productQuantity) : null,
     revenue: series.length ? sum((point) => point.revenue) : null,
   }
 }
