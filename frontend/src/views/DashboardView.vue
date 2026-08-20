@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import type { EChartsOption } from 'echarts'
-import { Calendar, Coin, Refresh, Tickets, Trophy, User, View } from '@element-plus/icons-vue'
+import { Calendar, Coin, Goods, Refresh, Tickets, Trophy, User, View } from '@element-plus/icons-vue'
 import ResourceState from '@/components/ResourceState.vue'
 import EChartPanel from '@/components/EChartPanel.vue'
 import LakeEmptyState from '@/components/LakeEmptyState.vue'
@@ -30,6 +30,11 @@ const dutyStats = computed(() => [
     label: '渔获',
     value: formatNumber(summary.value?.todayCatchCount, ' 尾'),
     icon: Trophy,
+  },
+  {
+    label: `商品销售 · ${summary.value?.todaySalesOrders ?? 0} 单`,
+    value: formatNumber(summary.value?.todayProductQuantity, ' 件'),
+    icon: Goods,
   },
 ])
 
@@ -108,7 +113,7 @@ onMounted(load)
       <div class="duty-brief__copy">
         <span class="station-kicker">今日值守</span>
         <h1>湖区经营概况</h1>
-        <p>收入、客流、预约和渔获均来自当前值守数据。</p>
+        <p>收入、客流、预约、渔获和商品销售均来自当前业务数据。</p>
       </div>
       <el-button :icon="Refresh" :loading="loading" @click="load">更新值守数据</el-button>
     </header>
@@ -232,7 +237,7 @@ onMounted(load)
               <span>{{ formatDate(booking.fishingDate) }}</span>
             </div>
             <div class="timeline-booking">
-              <span>{{ booking.memberName || '散客' }}</span>
+              <span>{{ booking.memberName || booking.contactName || '散客' }}</span>
               <strong>{{ booking.spotName || '待安排钓位' }}</strong>
               <small>{{ booking.bookingNo || '未生成单号' }}</small>
             </div>
@@ -326,7 +331,7 @@ onMounted(load)
 
 .duty-stat-list {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   padding: 10px;
   border-radius: 13px 0 0 13px;
   background: var(--paper-50);

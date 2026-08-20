@@ -1,8 +1,11 @@
 package com.fishing.platform.domain;
 
+import org.apache.ibatis.annotations.AutomapConstructor;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public final class DomainModels {
     private DomainModels() {
@@ -73,11 +76,22 @@ public final class DomainModels {
             BigDecimal mapX,
             BigDecimal mapY,
             Integer capacity,
+            BigDecimal defaultPrice,
             String status,
             String note,
             LocalDateTime createdAt,
             LocalDateTime updatedAt
     ) {
+        @AutomapConstructor
+        public Spot {
+        }
+
+        public Spot(Long id, Long zoneId, String zoneName, String code, String name,
+                    BigDecimal mapX, BigDecimal mapY, Integer capacity, String status,
+                    String note, LocalDateTime createdAt, LocalDateTime updatedAt) {
+            this(id, zoneId, zoneName, code, name, mapX, mapY, capacity, BigDecimal.ZERO,
+                    status, note, createdAt, updatedAt);
+        }
     }
 
     public record SpotAvailability(
@@ -91,7 +105,28 @@ public final class DomainModels {
             Integer capacity,
             Integer reservedCount,
             Integer availableCount,
-            String status
+            BigDecimal price,
+            String status,
+            Long version
+    ) {
+    }
+
+    public record SlotInventory(
+            Long id,
+            Long spotId,
+            String spotCode,
+            String spotName,
+            Long zoneId,
+            String zoneName,
+            LocalDate fishingDate,
+            String timeSlot,
+            Integer capacity,
+            Integer reservedCount,
+            BigDecimal price,
+            String status,
+            Long version,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt
     ) {
     }
 
@@ -100,6 +135,8 @@ public final class DomainModels {
             String bookingNo,
             Long memberId,
             String memberName,
+            String contactName,
+            String contactPhone,
             Long spotId,
             String spotName,
             String zoneName,
@@ -107,11 +144,41 @@ public final class DomainModels {
             String timeSlot,
             Integer guests,
             BigDecimal amount,
+            String paymentStatus,
             String status,
             String notes,
             LocalDateTime cancelledAt,
             LocalDateTime createdAt,
             LocalDateTime updatedAt
+    ) {
+        @AutomapConstructor
+        public Booking {
+        }
+
+        public Booking(Long id, String bookingNo, Long memberId, String memberName,
+                       Long spotId, String spotName, String zoneName, LocalDate fishingDate,
+                       String timeSlot, Integer guests, BigDecimal amount, String status,
+                       String notes, LocalDateTime cancelledAt, LocalDateTime createdAt,
+                       LocalDateTime updatedAt) {
+            this(id, bookingNo, memberId, memberName, memberName, null, spotId, spotName, zoneName,
+                    fishingDate, timeSlot, guests, amount,
+                    amount != null && amount.signum() == 0 ? "PAID" : "PENDING",
+                    status, notes, cancelledAt, createdAt, updatedAt);
+        }
+    }
+
+    public record BookingAudit(
+            Long id,
+            Long actorUserId,
+            String actorUsername,
+            Long bookingId,
+            String bookingNo,
+            String action,
+            String beforeStatus,
+            String afterStatus,
+            String beforePaymentStatus,
+            String afterPaymentStatus,
+            LocalDateTime createdAt
     ) {
     }
 
@@ -122,9 +189,12 @@ public final class DomainModels {
             String bookingNo,
             Long spotId,
             String spotName,
+            Long zoneId,
+            String zoneName,
             Long memberId,
             String memberName,
             LocalDate fishingDate,
+            String timeSlot,
             String species,
             BigDecimal weight,
             Integer quantity,
@@ -134,6 +204,19 @@ public final class DomainModels {
             LocalDateTime createdAt,
             LocalDateTime updatedAt
     ) {
+        @AutomapConstructor
+        public CatchRecord {
+        }
+
+        public CatchRecord(Long id, String catchNo, Long bookingId, String bookingNo,
+                           Long spotId, String spotName, Long memberId, String memberName,
+                           LocalDate fishingDate, String species, BigDecimal weight,
+                           Integer quantity, String notes, String status, Long version,
+                           LocalDateTime createdAt, LocalDateTime updatedAt) {
+            this(id, catchNo, bookingId, bookingNo, spotId, spotName, null, null,
+                    memberId, memberName, fishingDate, "MORNING", species, weight, quantity,
+                    notes, status, version, createdAt, updatedAt);
+        }
     }
 
     public record Member(
@@ -146,6 +229,31 @@ public final class DomainModels {
             String status,
             LocalDateTime createdAt,
             LocalDateTime updatedAt
+    ) {
+    }
+
+    public record MemberAudit(
+            Long id,
+            Long actorUserId,
+            String actorUsername,
+            Long targetMemberId,
+            String targetMemberNo,
+            String action,
+            String beforeLevel,
+            String afterLevel,
+            Integer beforePoints,
+            Integer afterPoints,
+            String beforeStatus,
+            String afterStatus,
+            LocalDateTime createdAt
+    ) {
+    }
+
+    public record MemberActivity(
+            Member member,
+            List<Booking> bookings,
+            List<CatchRecord> catches,
+            List<SalesOrder> salesOrders
     ) {
     }
 
@@ -214,8 +322,18 @@ public final class DomainModels {
             Integer uniqueVisitors,
             Integer newMembers,
             Integer bookingCount,
+            Integer salesOrderCount,
+            Integer productQuantity,
             BigDecimal revenue
     ) {
+        @AutomapConstructor
+        public TrafficPoint {
+        }
+
+        public TrafficPoint(LocalDate statDate, Integer visits, Integer uniqueVisitors,
+                            Integer newMembers, Integer bookingCount, BigDecimal revenue) {
+            this(statDate, visits, uniqueVisitors, newMembers, bookingCount, 0, 0, revenue);
+        }
     }
 
     public record TrafficDailyEntry(
@@ -246,6 +364,7 @@ public final class DomainModels {
     public record RecentBooking(
             String bookingNo,
             String memberName,
+            String contactName,
             String spotName,
             LocalDate fishingDate,
             String timeSlot,

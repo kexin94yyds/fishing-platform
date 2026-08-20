@@ -93,6 +93,8 @@ class AuthorizationIntegrationTest {
         assertForbidden(put("/api/products/1"), session, csrf);
         assertForbidden(post("/api/payments/999999/confirm"), session, csrf);
         assertForbidden(post("/api/sales-orders/1/cancel"), session, csrf);
+        mockMvc.perform(get("/api/bookings/1/audits").session(session))
+                .andExpect(status().isForbidden());
 
         assertEquals(zoneCount, count("fishing_zone"));
         assertEquals(spotCount, count("fishing_spot"));

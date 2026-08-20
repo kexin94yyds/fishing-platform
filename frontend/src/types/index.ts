@@ -66,6 +66,7 @@ export interface Spot {
   name: string
   status: string
   capacity: number
+  defaultPrice: number
   mapX?: number | null
   mapY?: number | null
   note?: string
@@ -78,6 +79,8 @@ export interface Booking {
   bookingNo?: string
   memberId?: Id
   memberName?: string
+  contactName?: string
+  contactPhone?: string
   spotId: Id
   spotName?: string
   zoneName?: string
@@ -86,15 +89,31 @@ export interface Booking {
   guests: number
   status: string
   amount?: number
+  paymentStatus?: string
   notes?: string
   cancelledAt?: string
   createdAt?: string
   updatedAt?: string
 }
 
+export interface BookingAudit {
+  id: Id
+  actorUserId?: Id
+  actorUsername: string
+  bookingId: Id
+  bookingNo: string
+  action: string
+  beforeStatus?: string
+  afterStatus?: string
+  beforePaymentStatus?: string
+  afterPaymentStatus?: string
+  createdAt?: string
+}
+
 export interface RecentBooking {
   bookingNo: string
   memberName?: string
+  contactName?: string
   spotName: string
   fishingDate: string
   timeSlot: string
@@ -111,10 +130,13 @@ export interface CatchRecord {
   memberName?: string
   spotId: Id
   spotName?: string
+  zoneId?: Id
+  zoneName?: string
   species: string
   weight: number
   quantity: number
   fishingDate: string
+  timeSlot: string
   status: string
   version: number
   notes?: string
@@ -130,6 +152,7 @@ export interface CatchCreatePayload {
   weight: number
   quantity: number
   fishingDate: string
+  timeSlot?: string
   notes?: string
 }
 
@@ -149,6 +172,28 @@ export interface Member {
   status: string
   createdAt?: string
   updatedAt?: string
+}
+
+export interface MemberAudit {
+  id: Id
+  actorUsername: string
+  targetMemberId: Id
+  targetMemberNo: string
+  action: string
+  beforeLevel?: string
+  afterLevel?: string
+  beforePoints?: number
+  afterPoints?: number
+  beforeStatus?: string
+  afterStatus?: string
+  createdAt?: string
+}
+
+export interface MemberActivity {
+  member: Member
+  bookings: Booking[]
+  catches: CatchRecord[]
+  salesOrders: SaleOrder[]
 }
 
 export interface Product {
@@ -233,6 +278,8 @@ export interface DashboardSummary {
   memberTotal: number | null
   lowStockProducts: number | null
   todayCatchCount: number | null
+  todaySalesOrders: number | null
+  todayProductQuantity: number | null
   trafficTrend: TrendPoint[]
   bookingMix: Array<{ name: string; value: number }>
   recentBookings: RecentBooking[]
@@ -244,6 +291,8 @@ export interface TrafficPoint {
   uniqueVisitors: number
   newMembers: number
   bookingCount: number
+  salesOrderCount: number
+  productQuantity: number
   revenue: number
 }
 
@@ -254,6 +303,8 @@ export interface TrafficAnalytics {
   peakDailyUniqueVisitors: number | null
   newMembers: number | null
   bookingCount: number | null
+  salesOrderCount: number | null
+  productQuantity: number | null
   revenue: number | null
 }
 
@@ -290,5 +341,32 @@ export interface Availability {
   capacity?: number
   reservedCount?: number
   availableCount?: number
+  price?: number
   status: string
+  version?: number
+}
+
+export interface SlotInventory {
+  id: Id
+  spotId: Id
+  spotCode: string
+  spotName?: string
+  zoneId?: Id
+  zoneName?: string
+  fishingDate: string
+  timeSlot: string
+  capacity: number
+  reservedCount: number
+  price: number
+  status: 'AVAILABLE' | 'CLOSED'
+  version: number
+}
+
+export interface SlotInventoryPayload {
+  fishingDate: string
+  timeSlot: string
+  capacity: number
+  price: number
+  status: 'AVAILABLE' | 'CLOSED'
+  expectedVersion?: number
 }

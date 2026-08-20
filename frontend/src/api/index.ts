@@ -4,6 +4,7 @@ import type {
   Availability,
   Account,
   AccountAudit,
+  BookingAudit,
   Booking,
   CatchCreatePayload,
   CatchRecord,
@@ -11,6 +12,8 @@ import type {
   DashboardSummary,
   Id,
   Member,
+  MemberActivity,
+  MemberAudit,
   PageResult,
   Payment,
   Product,
@@ -19,6 +22,8 @@ import type {
   SaleCreateResult,
   SaleOrder,
   SaleOrderDetail,
+  SlotInventory,
+  SlotInventoryPayload,
   Spot,
   TrafficAnalytics,
   TrafficDailyEntry,
@@ -115,6 +120,14 @@ export const bookingApi = {
     }).then((data) =>
       toPage<Availability>(data, ['spots', 'availability']),
     ),
+  slots: (params: { date?: string; spotId?: Id }): Promise<PageResult<SlotInventory>> =>
+    request<unknown>({
+      url: '/bookings/slots',
+      method: 'GET',
+      params: { date: params.date, spotId: params.spotId },
+    }).then((data) => toPage<SlotInventory>(data, ['slots', 'inventories'])),
+  configureSlot: (spotId: Id, data: SlotInventoryPayload) =>
+    request<SlotInventory>({ url: `/bookings/slots/${spotId}`, method: 'PUT', data }),
   create: (data: Partial<Booking>) => request<Booking>({ url: '/bookings', method: 'POST', data }),
   cancel: (id: Booking['id']) =>
     request<Booking>({ url: `/bookings/${id}/cancel`, method: 'POST' }),
@@ -122,6 +135,10 @@ export const bookingApi = {
     request<Booking>({ url: `/bookings/${id}/complete`, method: 'POST' }),
   noShow: (id: Booking['id']) =>
     request<Booking>({ url: `/bookings/${id}/no-show`, method: 'POST' }),
+  audits: (id: Booking['id'], limit = 20): Promise<PageResult<BookingAudit>> =>
+    request<unknown>({ url: `/bookings/${id}/audits`, method: 'GET', params: { limit } }).then((data) =>
+      toPage<BookingAudit>(data, ['audits']),
+    ),
 }
 
 export const catchApi = {
@@ -142,6 +159,12 @@ export const memberApi = {
   create: (data: Partial<Member>) => request<Member>({ url: '/members', method: 'POST', data }),
   update: (id: Member['id'], data: Partial<Member>) =>
     request<Member>({ url: `/members/${id}`, method: 'PUT', data }),
+  activity: (id: Member['id']) =>
+    request<MemberActivity>({ url: `/members/${id}/activity`, method: 'GET' }),
+  audits: (id: Member['id'], limit = 20): Promise<PageResult<MemberAudit>> =>
+    request<unknown>({ url: `/members/${id}/audits`, method: 'GET', params: { limit } }).then((data) =>
+      toPage<MemberAudit>(data, ['audits']),
+    ),
 }
 
 export const productApi = {

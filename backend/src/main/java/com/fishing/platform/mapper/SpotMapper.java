@@ -14,7 +14,7 @@ public interface SpotMapper {
 
     String BASE_SELECT = """
             SELECT s.id, s.zone_id, z.name AS zone_name, s.code, s.name,
-                   s.map_x, s.map_y, s.capacity, s.status, s.note,
+                   s.map_x, s.map_y, s.capacity, s.default_price, s.status, s.note,
                    s.created_at, s.updated_at
             FROM fishing_spot s
             JOIN fishing_zone z ON z.id = s.zone_id
@@ -47,9 +47,9 @@ public interface SpotMapper {
 
     @Insert("""
             INSERT INTO fishing_spot
-                (zone_id, code, name, map_x, map_y, capacity, status, note)
+                (zone_id, code, name, map_x, map_y, capacity, default_price, status, note)
             VALUES
-                (#{zoneId}, #{code}, #{name}, #{mapX}, #{mapY}, #{capacity}, #{status}, #{note})
+                (#{zoneId}, #{code}, #{name}, #{mapX}, #{mapY}, #{capacity}, #{defaultPrice}, #{status}, #{note})
             """)
     int insert(@Param("zoneId") Long zoneId,
                @Param("code") String code,
@@ -57,6 +57,7 @@ public interface SpotMapper {
                @Param("mapX") BigDecimal mapX,
                @Param("mapY") BigDecimal mapY,
                @Param("capacity") Integer capacity,
+               @Param("defaultPrice") BigDecimal defaultPrice,
                @Param("status") String status,
                @Param("note") String note);
 
@@ -64,7 +65,8 @@ public interface SpotMapper {
             UPDATE fishing_spot
             SET zone_id = #{zoneId}, code = #{code}, name = #{name},
                 map_x = #{mapX}, map_y = #{mapY}, capacity = #{capacity},
-                status = #{status}, note = #{note}, updated_at = CURRENT_TIMESTAMP
+                default_price = #{defaultPrice}, status = #{status}, note = #{note},
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = #{id}
               AND NOT EXISTS (
                   SELECT 1
@@ -81,6 +83,7 @@ public interface SpotMapper {
                                @Param("mapX") BigDecimal mapX,
                                @Param("mapY") BigDecimal mapY,
                                @Param("capacity") Integer capacity,
+                               @Param("defaultPrice") BigDecimal defaultPrice,
                                @Param("status") String status,
                                @Param("note") String note,
                                @Param("fromDate") LocalDate fromDate);

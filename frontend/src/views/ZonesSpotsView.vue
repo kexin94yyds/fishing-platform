@@ -8,7 +8,7 @@ import LakeEmptyState from '@/components/LakeEmptyState.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { spotApi, zoneApi } from '@/api'
 import { errorMessage } from '@/api/http'
-import { statusLabel } from '@/utils/format'
+import { formatCurrency, statusLabel } from '@/utils/format'
 import { focusFirstInvalid } from '@/utils/forms'
 import { useAuthStore } from '@/stores/auth'
 import type { Id, Spot, Zone } from '@/types'
@@ -46,6 +46,7 @@ type SpotForm = {
   name: string
   status: string
   capacity: number
+  defaultPrice: number
   mapX: number | null
   mapY: number | null
   note: string
@@ -64,6 +65,7 @@ const spotForm = reactive<SpotForm>({
   name: '',
   status: 'OPEN',
   capacity: 1,
+  defaultPrice: 0,
   mapX: 50,
   mapY: 50,
   note: '',
@@ -163,6 +165,7 @@ function resetSpotForm(spot?: Spot) {
     name: spot?.name ?? '',
     status: spot?.status ?? 'OPEN',
     capacity: spot?.capacity ?? 1,
+    defaultPrice: Number(spot?.defaultPrice ?? 0),
     mapX: spot ? (spot.mapX ?? null) : 50,
     mapY: spot ? (spot.mapY ?? null) : 50,
     note: spot?.note ?? '',
@@ -270,6 +273,7 @@ async function saveSpot() {
       name: spotForm.name,
       status: spotForm.status,
       capacity: spotForm.capacity,
+      defaultPrice: spotForm.defaultPrice,
       mapX: spotForm.mapX,
       mapY: spotForm.mapY,
       note: spotForm.note,
@@ -407,6 +411,10 @@ onMounted(load)
                 <dd>{{ selectedSpot.capacity ?? '暂无' }} 人</dd>
               </div>
               <div>
+                <dt>基础收费</dt>
+                <dd>{{ formatCurrency(selectedSpot.defaultPrice) }} / 人</dd>
+              </div>
+              <div>
                 <dt>平面坐标</dt>
                 <dd>
                   {{
@@ -479,6 +487,9 @@ onMounted(load)
           </el-table-column>
           <el-table-column label="容量" width="90">
             <template #default="{ row }">{{ row.capacity ?? '暂无' }}</template>
+          </el-table-column>
+          <el-table-column label="基础收费" min-width="120">
+            <template #default="{ row }">{{ formatCurrency(row.defaultPrice) }}</template>
           </el-table-column>
           <el-table-column label="状态" width="105">
             <template #default="{ row }"><StatusTag :status="row.status" /></template>
@@ -605,6 +616,16 @@ onMounted(load)
               v-model="spotForm.capacity"
               :min="1"
               aria-label="钓位容量"
+              controls-position="right"
+            />
+          </el-form-item>
+          <el-form-item label="基础收费（元/人）">
+            <el-input-number
+              v-model="spotForm.defaultPrice"
+              :min="0"
+              :precision="2"
+              :step="10"
+              aria-label="钓位基础收费"
               controls-position="right"
             />
           </el-form-item>

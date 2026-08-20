@@ -63,7 +63,7 @@ class MysqlMigrationCompatibilityIntegrationTest {
     void mysqlStartupAcceptsOnlyLegacyDemoHistoryAndRunsTheMysqlForwardMigration() {
         assertTrue(flywayMigrationStrategy instanceof MysqlMigrationHistoryGuard,
                 "mysql profile 必须自动装配 MysqlMigrationHistoryGuard 为 FlywayMigrationStrategy");
-        assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10"), jdbcTemplate.queryForList(
+        assertEquals(List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"), jdbcTemplate.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE AND version IS NOT NULL ORDER BY installed_rank",
                 String.class));
         assertEquals(List.of("2", "4"), List.of(flyway.info().all()).stream()
@@ -88,7 +88,7 @@ class MysqlMigrationCompatibilityIntegrationTest {
         assertTrue(causeMessageContains(startupFailure, "MySQL Flyway 迁移历史不兼容"),
                 "失败必须来自自动装配的 MySQL Flyway 历史守卫");
         assertFalse(tableExists(databaseUrl, "mysql_strategy_pending_marker"),
-                "守卫失败前不得执行 V11 pending migration");
+                "守卫失败前不得执行 V13 pending migration");
     }
 
     private static ConfigurableApplicationContext startMysqlContext(String databaseUrl, String flywayLocations) {

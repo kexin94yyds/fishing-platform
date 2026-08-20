@@ -61,7 +61,9 @@ const hasTrafficData = computed(() =>
   (data.value?.series ?? []).some((point) => point.visits > 0 || point.uniqueVisitors > 0),
 )
 const hasOperationData = computed(() =>
-  (data.value?.series ?? []).some((point) => point.bookingCount > 0 || point.newMembers > 0),
+  (data.value?.series ?? []).some(
+    (point) => point.bookingCount > 0 || point.newMembers > 0 || point.productQuantity > 0,
+  ),
 )
 const hasRevenueData = computed(() =>
   (data.value?.series ?? []).some((point) => point.revenue > 0),
@@ -83,7 +85,7 @@ const dailyAverage = computed(() => {
 
 const trendOption = computed<EChartsOption>(() => ({
   aria: { enabled: true },
-  color: ['#17463a', '#b46145'],
+  color: ['#17463a', '#b46145', '#9b7b3f'],
   tooltip: { trigger: 'axis', renderMode: 'richText' },
   grid: {
     left: 12,
@@ -165,6 +167,13 @@ const operationOption = computed<EChartsOption>(() => ({
       smooth: true,
       symbolSize: 6,
       data: data.value?.series.map((item) => item.newMembers) ?? [],
+    },
+    {
+      name: '售出商品',
+      type: 'bar',
+      barMaxWidth: 16,
+      data: data.value?.series.map((item) => item.productQuantity) ?? [],
+      itemStyle: { borderRadius: [3, 3, 0, 0] },
     },
   ],
 }))
@@ -267,7 +276,7 @@ onMounted(load)
       <div>
         <span class="station-kicker">客流研判</span>
         <h1>把人流变化摊开来看</h1>
-        <p>到访与独立访客来自日汇总；预订、会员与营收仍实时取自业务事实。</p>
+        <p>到访与独立访客来自日汇总；预订、会员、商品销售与营收实时取自业务事实。</p>
       </div>
       <div class="traffic-head__actions">
         <el-radio-group v-model="days" aria-label="统计周期" @change="load">
@@ -304,6 +313,14 @@ onMounted(load)
             <div>
               <dt>关联预订</dt>
               <dd class="metric-value">{{ formatNumber(data?.bookingCount, ' 单') }}</dd>
+            </div>
+            <div>
+              <dt>商品销售单</dt>
+              <dd class="metric-value">{{ formatNumber(data?.salesOrderCount, ' 单') }}</dd>
+            </div>
+            <div>
+              <dt>售出商品</dt>
+              <dd class="metric-value">{{ formatNumber(data?.productQuantity, ' 件') }}</dd>
             </div>
             <div>
               <dt>关联营收</dt>
@@ -368,31 +385,33 @@ onMounted(load)
           <header>
             <div>
               <span class="chart-index">图二</span>
-              <h2>预订与新增会员联动</h2>
+              <h2>预订、会员与商品销售</h2>
             </div>
-            <p>观察到访后形成预订和会员沉淀的日变化。</p>
+            <p>对照每日预订、新增会员与现场售出商品数量。</p>
           </header>
           <LakeEmptyState
             v-if="!hasOperationData"
             title="暂无运营数据"
-            description="当前周期还没有预订或新增会员记录"
+            description="当前周期还没有预订、会员或商品销售记录"
             compact
           />
           <EChartPanel
             v-else
             :option="operationOption"
             height="290px"
-            label="每日预订与新增会员图"
+            label="每日预订、新增会员与商品销售图"
           />
           <details v-if="hasOperationData" class="data-table-details">
             <summary>查看运营趋势数据表</summary>
             <table>
-              <thead><tr><th>日期</th><th>预订量</th><th>新增会员</th></tr></thead>
+              <thead><tr><th>日期</th><th>预订量</th><th>新增会员</th><th>销售单</th><th>售出件数</th></tr></thead>
               <tbody>
                 <tr v-for="point in data?.series" :key="`operation-${point.statDate}`">
                   <th>{{ dateLabel(point.statDate) }}</th>
                   <td>{{ point.bookingCount }}</td>
                   <td>{{ point.newMembers }}</td>
+                  <td>{{ point.salesOrderCount }}</td>
+                  <td>{{ point.productQuantity }}</td>
                 </tr>
               </tbody>
             </table>
@@ -428,7 +447,7 @@ onMounted(load)
           <div>
             <span class="station-kicker">人工客流台账</span>
             <h2>按业务日期复核到访</h2>
-            <p>这里只能录入到访与独立访客；预订、会员和营收始终由实时业务数据计算。</p>
+            <p>这里只能录入到访与独立访客；预订、会员、商品销售和营收始终由实时业务数据计算。</p>
           </div>
           <el-button type="primary" :icon="Plus" @click="openTrafficEntry()">录入客流</el-button>
         </header>

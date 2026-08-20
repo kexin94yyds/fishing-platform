@@ -50,6 +50,27 @@ public interface DashboardMapper {
     long pendingPayments();
 
     @Select("""
+            SELECT COUNT(*)
+            FROM sales_order
+            WHERE status != 'CANCELLED'
+              AND created_at >= #{dayStart}
+              AND created_at < #{dayEnd}
+            """)
+    long todaySalesOrders(@Param("dayStart") LocalDateTime dayStart,
+                          @Param("dayEnd") LocalDateTime dayEnd);
+
+    @Select("""
+            SELECT COALESCE(SUM(i.quantity), 0)
+            FROM sales_order o
+            JOIN sales_order_item i ON i.order_id = o.id
+            WHERE o.status != 'CANCELLED'
+              AND o.created_at >= #{dayStart}
+              AND o.created_at < #{dayEnd}
+            """)
+    long todayProductQuantity(@Param("dayStart") LocalDateTime dayStart,
+                              @Param("dayEnd") LocalDateTime dayEnd);
+
+    @Select("""
             SELECT status AS name, COUNT(*) AS metric_value
             FROM booking
             WHERE fishing_date = #{today}
@@ -59,7 +80,7 @@ public interface DashboardMapper {
     List<DashboardMetric> bookingMix(@Param("today") LocalDate today);
 
     @Select("""
-            SELECT b.booking_no, m.name AS member_name, s.name AS spot_name,
+            SELECT b.booking_no, m.name AS member_name, b.contact_name, s.name AS spot_name,
                    b.fishing_date, b.time_slot, b.status, b.amount
             FROM booking b
             LEFT JOIN member m ON m.id = b.member_id

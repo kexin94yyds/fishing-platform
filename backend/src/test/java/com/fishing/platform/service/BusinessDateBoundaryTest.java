@@ -14,6 +14,7 @@ import com.fishing.platform.mapper.BookingMapper;
 import com.fishing.platform.mapper.CatchMapper;
 import com.fishing.platform.mapper.DashboardMapper;
 import com.fishing.platform.mapper.MemberMapper;
+import com.fishing.platform.mapper.PaymentMapper;
 import com.fishing.platform.mapper.SpotMapper;
 import com.fishing.platform.mapper.ZoneMapper;
 import org.junit.jupiter.api.Test;
@@ -60,7 +61,7 @@ class BusinessDateBoundaryTest {
                 BigDecimal.ONE, 1, null));
 
         verify(catchMapper).insert(
-                anyString(), eq(7L), eq(4L), eq(3L), eq(SHANGHAI_DATE), eq("鲫鱼"),
+                anyString(), eq(7L), eq(4L), eq(3L), eq(SHANGHAI_DATE), eq("MORNING"), eq("鲫鱼"),
                 eq(BigDecimal.ONE), eq(1), eq(null), eq("RECORDED"));
     }
 
@@ -69,10 +70,11 @@ class BusinessDateBoundaryTest {
         BookingMapper bookingMapper = mock(BookingMapper.class);
         SpotMapper spotMapper = mock(SpotMapper.class);
         MemberMapper memberMapper = mock(MemberMapper.class);
+        PaymentMapper paymentMapper = mock(PaymentMapper.class);
         ZoneMapper zoneMapper = mock(ZoneMapper.class);
         CurrentUserService currentUserService = mock(CurrentUserService.class);
         BookingService service = new BookingService(
-                bookingMapper, spotMapper, memberMapper, zoneMapper,
+                bookingMapper, spotMapper, memberMapper, paymentMapper, zoneMapper,
                 currentUserService, SHANGHAI_BOUNDARY_CLOCK);
 
         BookingRequest request = new BookingRequest(
@@ -80,7 +82,7 @@ class BusinessDateBoundaryTest {
                 BigDecimal.ZERO, null);
 
         assertThrows(BusinessException.class, () -> service.create(request));
-        verifyNoInteractions(bookingMapper, spotMapper, memberMapper, zoneMapper, currentUserService);
+        verifyNoInteractions(bookingMapper, spotMapper, memberMapper, paymentMapper, zoneMapper, currentUserService);
     }
 
     @Test
@@ -96,7 +98,7 @@ class BusinessDateBoundaryTest {
         when(zoneMapper.findByIdForUpdate(3L)).thenReturn(zone);
         when(mapper.updateIfCapacityAllows(
                 eq(9L), eq(3L), eq("T-1"), eq("测试钓位"), eq(BigDecimal.TEN),
-                eq(BigDecimal.TEN), eq(1), eq("OPEN"), eq(null), eq(SHANGHAI_DATE)))
+                eq(BigDecimal.TEN), eq(1), eq(BigDecimal.ZERO), eq("OPEN"), eq(null), eq(SHANGHAI_DATE)))
                 .thenReturn(1);
 
         SpotService service = new SpotService(mapper, zoneMapper, SHANGHAI_BOUNDARY_CLOCK);
@@ -106,7 +108,7 @@ class BusinessDateBoundaryTest {
 
         verify(mapper).updateIfCapacityAllows(
                 eq(9L), eq(3L), eq("T-1"), eq("测试钓位"), eq(BigDecimal.TEN),
-                eq(BigDecimal.TEN), eq(1), eq("OPEN"), eq(null), eq(SHANGHAI_DATE));
+                eq(BigDecimal.TEN), eq(1), eq(BigDecimal.ZERO), eq("OPEN"), eq(null), eq(SHANGHAI_DATE));
         verify(mapper).updateFutureInventoryCapacity(9L, 1, SHANGHAI_DATE);
     }
 
@@ -143,7 +145,7 @@ class BusinessDateBoundaryTest {
         when(catchMapper.lockById(5L)).thenReturn(5L);
         when(catchMapper.findById(5L)).thenReturn(existing);
         when(catchMapper.update(
-                eq(5L), eq(7L), eq(4L), eq(3L), eq(futureDate), eq("鲤鱼"),
+                eq(5L), eq(7L), eq(4L), eq(3L), eq(futureDate), eq("MORNING"), eq("鲤鱼"),
                 eq(TWO), eq(1), eq("确认作废"), eq("VOID"), eq("RECORDED"), eq(0L)))
                 .thenReturn(1);
 
@@ -155,7 +157,7 @@ class BusinessDateBoundaryTest {
 
         verifyNoInteractions(bookingMapper);
         verify(catchMapper).update(
-                eq(5L), eq(7L), eq(4L), eq(3L), eq(futureDate), eq("鲤鱼"),
+                eq(5L), eq(7L), eq(4L), eq(3L), eq(futureDate), eq("MORNING"), eq("鲤鱼"),
                 eq(TWO), eq(1), eq("确认作废"), eq("VOID"), eq("RECORDED"), eq(0L));
     }
 

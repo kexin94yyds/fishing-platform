@@ -149,7 +149,7 @@ onMounted(load)
       <div>
         <span class="station-kicker">收费账房</span>
         <h1>先清待办，再对账目</h1>
-        <p>{{ canConfirmPayments ? '现场到账确认会同步更新关联销售订单。' : '可查看收费记录，到账由管理员核实。' }}</p>
+        <p>{{ canConfirmPayments ? '现场到账确认会同步更新关联预订或销售订单。' : '可查看收费记录，到账由管理员核实。' }}</p>
       </div>
       <el-button :icon="Refresh" :loading="loading" @click="load">刷新账目</el-button>
     </header>
@@ -258,8 +258,8 @@ onMounted(load)
               <strong class="metric-value">{{ formatCurrency(pendingAmount) }}</strong>
             </div>
             <div>
-              <span>关联销售订单</span>
-              <strong class="metric-value">{{ orders.length }} 单</strong>
+              <span>关联业务流水</span>
+              <strong class="metric-value">{{ payments.length }} 笔</strong>
             </div>
           </div>
 
@@ -390,7 +390,7 @@ onMounted(load)
           </el-form-item>
         </el-form>
         <el-alert
-          title="核实到账后将同步完成关联销售订单，此操作不能重复执行"
+          :title="`核实到账后将同步更新关联${businessTypeLabel(selectedPayment.businessType)}，此操作不能重复执行`"
           type="info"
           :closable="false"
           show-icon

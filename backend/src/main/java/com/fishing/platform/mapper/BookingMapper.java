@@ -1,6 +1,8 @@
 package com.fishing.platform.mapper;
 
 import com.fishing.platform.domain.DomainModels.Booking;
+import com.fishing.platform.domain.DomainModels.BookingAudit;
+import com.fishing.platform.domain.DomainModels.SlotInventory;
 import com.fishing.platform.domain.DomainModels.SpotAvailability;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Param;
@@ -15,9 +17,10 @@ public interface BookingMapper {
 
     String BOOKING_SELECT = """
             SELECT b.id, b.booking_no, b.member_id, m.name AS member_name,
+                   b.contact_name, b.contact_phone,
                    b.spot_id, s.name AS spot_name, z.name AS zone_name,
-                   b.fishing_date, b.time_slot, b.guests, b.amount, b.status,
-                   b.notes, b.cancelled_at, b.created_at, b.updated_at
+                   b.fishing_date, b.time_slot, b.guests, b.amount, b.payment_status,
+                   b.status, b.notes, b.cancelled_at, b.created_at, b.updated_at
             FROM booking b
             JOIN fishing_spot s ON s.id = b.spot_id
             JOIN fishing_zone z ON z.id = s.zone_id
@@ -39,6 +42,18 @@ public interface BookingMapper {
                           @Param("date") LocalDate date,
                           @Param("memberId") Long memberId);
 
+    @Select("""
+            SELECT COUNT(*) > 0
+            FROM booking
+            WHERE fishing_date = #{date}
+              AND time_slot = #{timeSlot}
+              AND active_customer_key = #{customerKey}
+              AND status = 'CONFIRMED'
+            """)
+    boolean hasActiveCustomerBooking(@Param("date") LocalDate date,
+                                     @Param("timeSlot") String timeSlot,
+                                     @Param("customerKey") String customerKey);
+
     @Select(BOOKING_SELECT + " WHERE b.id = #{id}")
     Booking findById(@Param("id") Long id);
 
@@ -58,15 +73,15 @@ public interface BookingMapper {
 
     @Update("""
             UPDATE booking
-            SET status = #{status}, updated_at = CURRENT_TIMESTAMP
+            SET status = #{status}, active_customer_key = NULL, updated_at = CURRENT_TIMESTAMP
             WHERE id = #{id} AND status = 'CONFIRMED'
             """)
     int settle(@Param("id") Long id, @Param("status") String status);
 
     @Insert("""
             INSERT IGNORE INTO fishing_slot_inventory
-                (spot_id, fishing_date, time_slot, capacity, reserved_count, status)
-            SELECT s.id, #{date}, #{timeSlot}, s.capacity, 0, 'AVAILABLE'
+                (spot_id, fishing_date, time_slot, capacity, reserved_count, price, status)
+            SELECT s.id, #{date}, #{timeSlot}, s.capacity, 0, s.default_price, 'AVAILABLE'
             FROM fishing_spot s
             JOIN fishing_zone z ON z.id = s.zone_id
             WHERE s.id = #{spotId} AND s.status = 'OPEN' AND z.status = 'ACTIVE'
@@ -100,25 +115,33 @@ public interface BookingMapper {
 
     @Insert("""
             INSERT INTO booking
-                (booking_no, member_id, spot_id, user_id, fishing_date, time_slot,
-                 guests, amount, status, notes)
+                (booking_no, member_id, contact_name, contact_phone, active_customer_key,
+                 spot_id, user_id, fishing_date, time_slot, guests, amount, payment_status, status, notes)
             VALUES
-                (#{bookingNo}, #{memberId}, #{spotId}, #{userId}, #{date}, #{timeSlot},
-                 #{guests}, #{amount}, 'CONFIRMED', #{notes})
+                (#{bookingNo}, #{memberId}, #{contactName}, #{contactPhone}, #{customerKey},
+                 #{spotId}, #{userId}, #{date}, #{timeSlot}, #{guests}, #{amount},
+                 #{paymentStatus}, 'CONFIRMED', #{notes})
             """)
     int insertBooking(@Param("bookingNo") String bookingNo,
                       @Param("memberId") Long memberId,
+                      @Param("contactName") String contactName,
+                      @Param("contactPhone") String contactPhone,
+                      @Param("customerKey") String customerKey,
                       @Param("spotId") Long spotId,
                       @Param("userId") Long userId,
                       @Param("date") LocalDate date,
                       @Param("timeSlot") String timeSlot,
                       @Param("guests") Integer guests,
                       @Param("amount") BigDecimal amount,
+                      @Param("paymentStatus") String paymentStatus,
                       @Param("notes") String notes);
 
     @Update("""
             UPDATE booking
-            SET status = 'CANCELLED', cancelled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+            SET status = 'CANCELLED',
+                payment_status = CASE WHEN payment_status = 'PENDING' THEN 'CANCELLED' ELSE payment_status END,
+                active_customer_key = NULL,
+                cancelled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
             WHERE id = #{id} AND status = 'CONFIRMED'
             """)
     int cancel(@Param("id") Long id);
@@ -148,12 +171,14 @@ public interface BookingMapper {
                        - COALESCE(i.reserved_count, 0),
                        0
                    ) AS available_count,
+                   COALESCE(i.price, s.default_price) AS price,
                    CASE WHEN z.status != 'ACTIVE' THEN 'CLOSED'
                         WHEN s.status != 'OPEN' THEN s.status
                         WHEN i.status = 'CLOSED' THEN 'CLOSED'
                         WHEN COALESCE(i.reserved_count, 0)
                              >= LEAST(COALESCE(i.capacity, s.capacity), s.capacity) THEN 'FULL'
-                        ELSE 'AVAILABLE' END AS status
+                        ELSE 'AVAILABLE' END AS status,
+                   COALESCE(i.version, 0) AS version
             FROM fishing_spot s
             JOIN fishing_zone z ON z.id = s.zone_id
             LEFT JOIN fishing_slot_inventory i
@@ -169,4 +194,99 @@ public interface BookingMapper {
     List<SpotAvailability> availability(@Param("date") LocalDate date,
                                         @Param("timeSlot") String timeSlot,
                                         @Param("spotId") Long spotId);
+
+    String INVENTORY_SELECT = """
+            SELECT i.id, i.spot_id, s.code AS spot_code, s.name AS spot_name,
+                   z.id AS zone_id, z.name AS zone_name,
+                   i.fishing_date, i.time_slot, i.capacity, i.reserved_count,
+                   i.price, i.status, i.version, i.created_at, i.updated_at
+            FROM fishing_slot_inventory i
+            JOIN fishing_spot s ON s.id = i.spot_id
+            JOIN fishing_zone z ON z.id = s.zone_id
+            """;
+
+    @Select("""
+            <script>
+            """ + INVENTORY_SELECT + """
+            WHERE i.fishing_date = #{date}
+            <if test="spotId != null">AND i.spot_id = #{spotId}</if>
+            ORDER BY z.id, s.id, i.time_slot
+            </script>
+            """)
+    List<SlotInventory> findInventories(@Param("date") LocalDate date,
+                                         @Param("spotId") Long spotId);
+
+    @Select(INVENTORY_SELECT + """
+            WHERE i.spot_id = #{spotId}
+              AND i.fishing_date = #{date}
+              AND i.time_slot = #{timeSlot}
+            FOR UPDATE
+            """)
+    SlotInventory findInventoryForUpdate(@Param("spotId") Long spotId,
+                                          @Param("date") LocalDate date,
+                                          @Param("timeSlot") String timeSlot);
+
+    @Insert("""
+            INSERT INTO fishing_slot_inventory
+                (spot_id, fishing_date, time_slot, capacity, reserved_count, price, status, version)
+            VALUES
+                (#{spotId}, #{date}, #{timeSlot}, #{capacity}, 0, #{price}, #{status}, 0)
+            """)
+    int insertInventory(@Param("spotId") Long spotId,
+                        @Param("date") LocalDate date,
+                        @Param("timeSlot") String timeSlot,
+                        @Param("capacity") Integer capacity,
+                        @Param("price") BigDecimal price,
+                        @Param("status") String status);
+
+    @Update("""
+            UPDATE fishing_slot_inventory
+            SET capacity = #{capacity}, price = #{price}, status = #{status},
+                version = version + 1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = #{id}
+              AND version = #{expectedVersion}
+              AND reserved_count <= #{capacity}
+            """)
+    int updateInventory(@Param("id") Long id,
+                        @Param("capacity") Integer capacity,
+                        @Param("price") BigDecimal price,
+                        @Param("status") String status,
+                        @Param("expectedVersion") Long expectedVersion);
+
+    @Update("""
+            UPDATE booking
+            SET payment_status = 'PAID', updated_at = CURRENT_TIMESTAMP
+            WHERE id = #{id}
+              AND payment_status = 'PENDING'
+              AND status != 'CANCELLED'
+            """)
+    int markPaid(@Param("id") Long id);
+
+    @Insert("""
+            INSERT INTO booking_audit_log
+                (actor_user_id, actor_username, booking_id, booking_no, action,
+                 before_status, after_status, before_payment_status, after_payment_status)
+            VALUES
+                (#{actorUserId}, #{actorUsername}, #{bookingId}, #{bookingNo}, #{action},
+                 #{beforeStatus}, #{afterStatus}, #{beforePaymentStatus}, #{afterPaymentStatus})
+            """)
+    int insertAudit(@Param("actorUserId") Long actorUserId,
+                    @Param("actorUsername") String actorUsername,
+                    @Param("bookingId") Long bookingId,
+                    @Param("bookingNo") String bookingNo,
+                    @Param("action") String action,
+                    @Param("beforeStatus") String beforeStatus,
+                    @Param("afterStatus") String afterStatus,
+                    @Param("beforePaymentStatus") String beforePaymentStatus,
+                    @Param("afterPaymentStatus") String afterPaymentStatus);
+
+    @Select("""
+            SELECT id, actor_user_id, actor_username, booking_id, booking_no, action,
+                   before_status, after_status, before_payment_status, after_payment_status, created_at
+            FROM booking_audit_log
+            WHERE booking_id = #{bookingId}
+            ORDER BY created_at DESC, id DESC
+            LIMIT #{limit}
+            """)
+    List<BookingAudit> findAudits(@Param("bookingId") Long bookingId, @Param("limit") int limit);
 }

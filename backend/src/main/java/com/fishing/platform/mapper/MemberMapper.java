@@ -1,6 +1,7 @@
 package com.fishing.platform.mapper;
 
 import com.fishing.platform.domain.DomainModels.Member;
+import com.fishing.platform.domain.DomainModels.MemberAudit;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -52,4 +53,35 @@ public interface MemberMapper {
                @Param("level") String level,
                @Param("points") Integer points,
                @Param("status") String status);
+
+    @Insert("""
+            INSERT INTO member_audit_log
+                (actor_user_id, actor_username, target_member_id, target_member_no, action,
+                 before_level, after_level, before_points, after_points, before_status, after_status)
+            VALUES
+                (#{actorUserId}, #{actorUsername}, #{targetMemberId}, #{targetMemberNo}, #{action},
+                 #{beforeLevel}, #{afterLevel}, #{beforePoints}, #{afterPoints}, #{beforeStatus}, #{afterStatus})
+            """)
+    int insertAudit(@Param("actorUserId") Long actorUserId,
+                    @Param("actorUsername") String actorUsername,
+                    @Param("targetMemberId") Long targetMemberId,
+                    @Param("targetMemberNo") String targetMemberNo,
+                    @Param("action") String action,
+                    @Param("beforeLevel") String beforeLevel,
+                    @Param("afterLevel") String afterLevel,
+                    @Param("beforePoints") Integer beforePoints,
+                    @Param("afterPoints") Integer afterPoints,
+                    @Param("beforeStatus") String beforeStatus,
+                    @Param("afterStatus") String afterStatus);
+
+    @Select("""
+            SELECT id, actor_user_id, actor_username, target_member_id, target_member_no,
+                   action, before_level, after_level, before_points, after_points,
+                   before_status, after_status, created_at
+            FROM member_audit_log
+            WHERE target_member_id = #{memberId}
+            ORDER BY created_at DESC, id DESC
+            LIMIT #{limit}
+            """)
+    List<MemberAudit> findAudits(@Param("memberId") Long memberId, @Param("limit") int limit);
 }

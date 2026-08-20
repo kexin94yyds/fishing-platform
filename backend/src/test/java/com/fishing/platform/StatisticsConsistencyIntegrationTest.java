@@ -48,11 +48,15 @@ class StatisticsConsistencyIntegrationTest {
         assertEquals(today.get("visits").asLong(), dashboard.get("visitorsToday").asLong());
         assertEquals(today.get("visits").asLong(), lastTrendPoint.get("value").asLong());
         assertEquals(today.get("bookingCount").asLong(), dashboard.get("todayBookings").asLong());
+        assertEquals(today.get("salesOrderCount").asLong(), dashboard.get("todaySalesOrders").asLong());
+        assertEquals(today.get("productQuantity").asLong(), dashboard.get("todayProductQuantity").asLong());
         assertEquals(0, today.get("revenue").decimalValue()
                 .compareTo(dashboard.get("todayRevenue").decimalValue()));
 
         assertEquals(2, today.get("bookingCount").asLong(), "预约数应来自未取消的预约事实");
         assertEquals(3, today.get("newMembers").asLong(), "新会员数应来自会员创建事实");
+        assertEquals(1, today.get("salesOrderCount").asLong(), "销售单数应来自未取消现场销售事实");
+        assertEquals(2, today.get("productQuantity").asLong(), "售出件数应来自销售单明细");
         assertEquals(0, BigDecimal.ZERO.compareTo(today.get("revenue").decimalValue()),
                 "未确认到账前今日营收应为零");
     }

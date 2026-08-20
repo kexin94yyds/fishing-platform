@@ -109,6 +109,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT,
                                 "/api/zones/**",
                                 "/api/spots/**",
+                                "/api/bookings/slots/**",
                                 "/api/products/**",
                                 "/api/traffic-daily/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST,
@@ -117,6 +118,8 @@ public class SecurityConfig {
                                 "/api/payments/*/confirm",
                                 "/api/sales-orders/*/cancel").hasRole("ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/members/*/audits").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/bookings/*/audits").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(accountStateFilter, AuthorizationFilter.class)
                 .requestCache(cache -> cache.disable())
