@@ -386,26 +386,87 @@ async function submit() {
   gap: 0 18px;
 }
 
+.register-form-grid :deep(.el-form-item) {
+  margin-bottom: 20px;
+}
+
 :deep(.el-form-item__label) {
   padding-bottom: 7px;
-  color: #405149;
+  color: #3d514a;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 680;
+  letter-spacing: 0.015em;
 }
 
 :deep(.el-input__wrapper) {
-  min-height: 44px;
-  border-radius: 10px;
-  background: var(--paper-100);
-  box-shadow: 0 0 0 1px #ddd5c8 inset;
+  min-height: 50px;
+  padding: 0 14px;
+  border: 1px solid #d7ddd8;
+  border-radius: 11px;
+  background: rgb(248 244 235 / 58%);
+  box-shadow: none;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px #9fb2aa inset;
+  border-color: #a7b8b0;
+  background: rgb(255 253 248 / 76%);
+  box-shadow: none;
 }
 
 :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 1px var(--lake-800) inset;
+  border-color: var(--lake-700);
+  background: var(--paper-50);
+  box-shadow: 0 0 0 2px rgb(44 103 85 / 7%);
+}
+
+:deep(.el-input__prefix) {
+  margin-right: 9px;
+}
+
+:deep(.el-input__prefix-inner) {
+  display: flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  color: #6e827a;
+  background: transparent;
+}
+
+:deep(.el-input__prefix-inner .el-icon) {
+  font-size: 14px;
+}
+
+:deep(.el-input__inner) {
+  color: #223b34;
+  font-size: 13.5px;
+  font-weight: 520;
+  letter-spacing: 0.01em;
+}
+
+:deep(.el-input__inner:focus),
+:deep(.el-input__inner:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+:deep(.el-input__inner::placeholder) {
+  color: #98a59f;
+  font-weight: 430;
+}
+
+:deep(.el-input__suffix-inner) {
+  color: #71877e;
+}
+
+:deep(.el-form-item.is-error .el-input__wrapper) {
+  border-color: #bd725a;
+  background: rgb(255 250 247 / 74%);
+  box-shadow: 0 0 0 1px rgb(180 97 69 / 7%);
 }
 
 .register-agreement {
