@@ -42,6 +42,9 @@ public interface BookingMapper {
                           @Param("date") LocalDate date,
                           @Param("memberId") Long memberId);
 
+    @Select(BOOKING_SELECT + " WHERE b.user_id = #{userId} ORDER BY b.created_at DESC, b.id DESC")
+    List<Booking> findAllByUserId(@Param("userId") Long userId);
+
     @Select("""
             SELECT COUNT(*) > 0
             FROM booking
@@ -54,11 +57,26 @@ public interface BookingMapper {
                                      @Param("timeSlot") String timeSlot,
                                      @Param("customerKey") String customerKey);
 
+    @Select("""
+            SELECT COUNT(*) > 0
+            FROM booking
+            WHERE fishing_date = #{date}
+              AND time_slot = #{timeSlot}
+              AND status = 'CONFIRMED'
+              AND CONCAT('P:', REPLACE(REPLACE(contact_phone, ' ', ''), '-', '')) = #{contactKey}
+            """)
+    boolean hasActiveContactBooking(@Param("date") LocalDate date,
+                                    @Param("timeSlot") String timeSlot,
+                                    @Param("contactKey") String contactKey);
+
     @Select(BOOKING_SELECT + " WHERE b.id = #{id}")
     Booking findById(@Param("id") Long id);
 
     @Select("SELECT id FROM booking WHERE id = #{id} FOR UPDATE")
     Long lockById(@Param("id") Long id);
+
+    @Select("SELECT id FROM booking WHERE id = #{id} AND user_id = #{userId} FOR UPDATE")
+    Long lockByIdForUser(@Param("id") Long id, @Param("userId") Long userId);
 
     @Select(BOOKING_SELECT + " WHERE b.booking_no = #{bookingNo}")
     Booking findByNo(@Param("bookingNo") String bookingNo);
@@ -73,7 +91,8 @@ public interface BookingMapper {
 
     @Update("""
             UPDATE booking
-            SET status = #{status}, active_customer_key = NULL, updated_at = CURRENT_TIMESTAMP
+            SET status = #{status}, active_customer_key = NULL, active_contact_key = NULL,
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = #{id} AND status = 'CONFIRMED'
             """)
     int settle(@Param("id") Long id, @Param("status") String status);
@@ -115,10 +134,10 @@ public interface BookingMapper {
 
     @Insert("""
             INSERT INTO booking
-                (booking_no, member_id, contact_name, contact_phone, active_customer_key,
+                (booking_no, member_id, contact_name, contact_phone, active_customer_key, active_contact_key,
                  spot_id, user_id, fishing_date, time_slot, guests, amount, payment_status, status, notes)
             VALUES
-                (#{bookingNo}, #{memberId}, #{contactName}, #{contactPhone}, #{customerKey},
+                (#{bookingNo}, #{memberId}, #{contactName}, #{contactPhone}, #{customerKey}, #{contactKey},
                  #{spotId}, #{userId}, #{date}, #{timeSlot}, #{guests}, #{amount},
                  #{paymentStatus}, 'CONFIRMED', #{notes})
             """)
@@ -127,6 +146,7 @@ public interface BookingMapper {
                       @Param("contactName") String contactName,
                       @Param("contactPhone") String contactPhone,
                       @Param("customerKey") String customerKey,
+                      @Param("contactKey") String contactKey,
                       @Param("spotId") Long spotId,
                       @Param("userId") Long userId,
                       @Param("date") LocalDate date,
@@ -141,6 +161,7 @@ public interface BookingMapper {
             SET status = 'CANCELLED',
                 payment_status = CASE WHEN payment_status = 'PENDING' THEN 'CANCELLED' ELSE payment_status END,
                 active_customer_key = NULL,
+                active_contact_key = NULL,
                 cancelled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
             WHERE id = #{id} AND status = 'CONFIRMED'
             """)

@@ -18,6 +18,12 @@ const router = createRouter({
       meta: { public: true, title: '创建账号' },
     },
     {
+      path: '/my-fishing',
+      name: 'my-fishing',
+      component: () => import('@/views/MyFishingView.vue'),
+      meta: { title: '我的垂钓', requiresUser: true },
+    },
+    {
       path: '/',
       component: AppShell,
       children: [
@@ -90,7 +96,7 @@ router.beforeEach(async (to) => {
 
   if (to.meta.public) {
     if (['login', 'register'].includes(String(to.name)) && auth.isAuthenticated) {
-      return { name: 'dashboard' }
+      return { name: auth.isUser ? 'my-fishing' : 'dashboard' }
     }
     if (to.name === 'register') {
       await auth.hydrateRegistration()
@@ -101,6 +107,12 @@ router.beforeEach(async (to) => {
 
   if (!auth.isAuthenticated) {
     return { name: 'login', query: { redirect: to.fullPath } }
+  }
+  if (auth.isUser && to.name !== 'my-fishing') {
+    return { name: 'my-fishing' }
+  }
+  if (!auth.isUser && to.meta.requiresUser) {
+    return { name: 'dashboard' }
   }
   if (to.meta.requiresAdmin && !auth.isAdmin) {
     return { name: 'dashboard' }

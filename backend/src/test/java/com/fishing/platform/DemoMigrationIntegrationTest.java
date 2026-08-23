@@ -26,10 +26,11 @@ class DemoMigrationIntegrationTest {
 
     @Test
     void demoStartupUsesSchemaAndDemoMigrations() {
-        assertEquals(List.of("1", "2", "3", "4", "5", "7", "8", "9", "10", "11", "12"), jdbcTemplate.queryForList(
+        assertEquals(List.of("1", "2", "3", "4", "5", "7", "8", "9", "10", "11", "12", "13", "14"), jdbcTemplate.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE AND version IS NOT NULL ORDER BY installed_rank",
                 String.class));
         assertNotNull(userMapper.findByUsername("admin"));
+        assertEquals("USER", userMapper.findByUsername("angler").role());
         assertEquals(3, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM fishing_zone", Integer.class));
         assertEquals(4, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM product", Integer.class));
     }

@@ -9,8 +9,10 @@ import com.fishing.platform.domain.DomainModels.SlotInventory;
 import com.fishing.platform.domain.DomainModels.Spot;
 import com.fishing.platform.domain.DomainModels.Zone;
 import com.fishing.platform.domain.DomainModels.SpotAvailability;
+import com.fishing.platform.domain.DomainModels.UserAccount;
 import com.fishing.platform.dto.ApiDtos.BookingRequest;
 import com.fishing.platform.dto.ApiDtos.SlotInventoryRequest;
+import com.fishing.platform.dto.ApiDtos.UserBookingRequest;
 import com.fishing.platform.mapper.BookingMapper;
 import com.fishing.platform.mapper.MemberMapper;
 import com.fishing.platform.mapper.PaymentMapper;
@@ -52,10 +54,24 @@ public class BookingService {
         return mapper.findAll(status, date, memberId);
     }
 
+    public List<Booking> findCurrentUserBookings() {
+        UserAccount actor = requireCurrentUser();
+        return mapper.findAllByUserId(actor.id());
+    }
+
     public List<SpotAvailability> availability(LocalDate date, String timeSlot, Long spotId) {
         LocalDate selectedDate = date == null ? LocalDate.now(businessClock) : date;
         String selectedSlot = timeSlot == null || timeSlot.isBlank() ? "MORNING" : timeSlot.trim();
         return mapper.availability(selectedDate, selectedSlot, spotId);
+    }
+
+    public List<SpotAvailability> availabilityForCurrentUser(LocalDate date, String timeSlot, Long spotId) {
+        requireCurrentUser();
+        LocalDate selectedDate = date == null ? LocalDate.now(businessClock) : date;
+        if (selectedDate.isBefore(LocalDate.now(businessClock))) {
+            throw new BusinessException("垂钓日期不能早于今天");
+        }
+        return availability(selectedDate, timeSlot, spotId);
     }
 
     public List<SlotInventory> findSlotInventories(LocalDate date, Long spotId) {
@@ -110,9 +126,29 @@ public class BookingService {
 
     @Transactional
     public Booking create(BookingRequest request) {
-        if (request.fishingDate().isBefore(LocalDate.now(businessClock))) {
-            throw new BusinessException("垂钓日期不能早于今天");
-        }
+        rejectPastBookingDate(request.fishingDate());
+        UserAccount actor = currentUserService.current();
+        return createForActor(request, actor, null);
+    }
+
+    @Transactional
+    public Booking createForCurrentUser(UserBookingRequest request) {
+        UserAccount actor = requireCurrentUser();
+        BookingRequest bookingRequest = new BookingRequest(
+                null,
+                actor.displayName(),
+                request.contactPhone().trim(),
+                request.spotId(),
+                request.fishingDate(),
+                request.timeSlot(),
+                request.guests(),
+                null,
+                request.notes());
+        return createForActor(bookingRequest, actor, "U:" + actor.id());
+    }
+
+    private Booking createForActor(BookingRequest request, UserAccount actor, String forcedCustomerKey) {
+        rejectPastBookingDate(request.fishingDate());
         Member member = null;
         if (request.memberId() != null) {
             member = memberMapper.findByIdForUpdate(request.memberId());
@@ -122,11 +158,17 @@ public class BookingService {
         }
         String contactName = member == null ? request.contactName().trim() : member.name();
         String contactPhone = member == null ? request.contactPhone().trim() : member.phone();
-        String customerKey = member == null
-                ? "P:" + normalizePhone(contactPhone)
-                : "M:" + member.id();
+        String customerKey = forcedCustomerKey != null
+                ? forcedCustomerKey
+                : member == null
+                    ? "P:" + normalizePhone(contactPhone)
+                    : "M:" + member.id();
+        String contactKey = "P:" + normalizePhone(contactPhone);
         if (mapper.hasActiveCustomerBooking(request.fishingDate(), request.timeSlot(), customerKey)) {
             throw new BusinessException("该顾客在所选日期和时段已有有效预订");
+        }
+        if (mapper.hasActiveContactBooking(request.fishingDate(), request.timeSlot(), contactKey)) {
+            throw new BusinessException("该联系电话在所选日期和时段已有有效预订");
         }
         if (spotMapper.lockById(request.spotId()) == null) {
             throw new NotFoundException("钓位不存在");
@@ -155,8 +197,7 @@ public class BookingService {
                 ? inventory.price().multiply(BigDecimal.valueOf(request.guests()))
                 : request.amount();
         String paymentStatus = amount.signum() == 0 ? "PAID" : "PENDING";
-        var actor = currentUserService.current();
-        mapper.insertBooking(bookingNo, request.memberId(), contactName, contactPhone, customerKey,
+        mapper.insertBooking(bookingNo, request.memberId(), contactName, contactPhone, customerKey, contactKey,
                 request.spotId(), actor.id(),
                 request.fishingDate(), request.timeSlot(), request.guests(),
                 amount, paymentStatus, request.notes());
@@ -171,23 +212,41 @@ public class BookingService {
 
     @Transactional
     public Booking cancel(Long id) {
+        UserAccount actor = currentUserService.current();
         Booking existing = lockConfirmedBooking(id);
+        return cancelLocked(existing, actor);
+    }
+
+    @Transactional
+    public Booking cancelCurrentUserBooking(Long id) {
+        UserAccount actor = requireCurrentUser();
+        if (mapper.lockByIdForUser(id, actor.id()) == null) {
+            throw new NotFoundException("预订不存在");
+        }
+        Booking existing = mapper.findById(id);
+        if (!"CONFIRMED".equals(existing.status())) {
+            throw new BusinessException("预订当前状态不允许该操作");
+        }
+        return cancelLocked(existing, actor);
+    }
+
+    private Booking cancelLocked(Booking existing, UserAccount actor) {
         LocalDate today = LocalDate.now(businessClock);
         if (!existing.fishingDate().isAfter(today)) {
             throw new BusinessException("垂钓日当天或之前不能取消，请由管理员结单");
         }
-        if (mapper.hasActiveCatch(id)) {
+        if (mapper.hasActiveCatch(existing.id())) {
             throw new BusinessException("该预订已有有效渔获记录，不能取消");
         }
-        if (mapper.cancel(id) == 0) {
+        if (mapper.cancel(existing.id()) == 0) {
             throw new BusinessException("预订已取消或当前状态不允许取消");
         }
         if (mapper.release(existing.spotId(), existing.fishingDate(), existing.timeSlot(), existing.guests()) == 0) {
             throw new BusinessException("预订库存释放失败");
         }
-        paymentMapper.cancelByBusiness("BOOKING", id);
-        Booking cancelled = mapper.findById(id);
-        audit(existing, cancelled, "CANCEL");
+        paymentMapper.cancelByBusiness("BOOKING", existing.id());
+        Booking cancelled = mapper.findById(existing.id());
+        audit(actor, existing, cancelled, "CANCEL");
         return cancelled;
     }
 
@@ -230,11 +289,29 @@ public class BookingService {
 
     private void audit(Booking before, Booking after, String action) {
         var actor = currentUserService.current();
+        audit(actor, before, after, action);
+    }
+
+    private void audit(UserAccount actor, Booking before, Booking after, String action) {
         mapper.insertAudit(actor.id(), actor.username(), after.id(), after.bookingNo(), action,
                 before.status(), after.status(), before.paymentStatus(), after.paymentStatus());
     }
 
+    private UserAccount requireCurrentUser() {
+        UserAccount actor = currentUserService.current();
+        if (!"USER".equals(actor.role())) {
+            throw new BusinessException(org.springframework.http.HttpStatus.FORBIDDEN, "仅钓友用户可访问");
+        }
+        return actor;
+    }
+
     private String normalizePhone(String phone) {
         return phone.replace(" ", "").replace("-", "").toLowerCase(Locale.ROOT);
+    }
+
+    private void rejectPastBookingDate(LocalDate fishingDate) {
+        if (fishingDate.isBefore(LocalDate.now(businessClock))) {
+            throw new BusinessException("垂钓日期不能早于今天");
+        }
     }
 }

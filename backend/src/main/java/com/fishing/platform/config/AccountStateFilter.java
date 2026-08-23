@@ -60,7 +60,9 @@ public class AccountStateFilter extends OncePerRequestFilter {
                 && authentication.getPrincipal() instanceof DatabaseUserPrincipal principal
                 && principal.sessionVersion() == account.sessionVersion();
         if (account == null || !account.enabled() || !sessionVersionIsCurrent
-                || !("ADMIN".equals(account.role()) || "OPERATOR".equals(account.role()))) {
+                || !("ADMIN".equals(account.role())
+                || "OPERATOR".equals(account.role())
+                || "USER".equals(account.role()))) {
             contextHolderStrategy.clearContext();
             HttpSession session = request.getSession(false);
             if (session != null) {

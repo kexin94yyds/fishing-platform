@@ -11,6 +11,7 @@ export const useAuthStore = defineStore('auth', () => {
   const registrationInitialized = ref(false)
   const isAuthenticated = computed(() => Boolean(user.value))
   const isAdmin = computed(() => String(user.value?.role || '').toUpperCase() === 'ADMIN')
+  const isUser = computed(() => String(user.value?.role || '').toUpperCase() === 'USER')
 
   async function hydrate() {
     if (initialized.value) return
@@ -77,6 +78,7 @@ export const useAuthStore = defineStore('auth', () => {
     authenticating,
     isAuthenticated,
     isAdmin,
+    isUser,
     registrationEnabled,
     registrationInitialized,
     hydrate,

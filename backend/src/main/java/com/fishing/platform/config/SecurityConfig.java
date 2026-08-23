@@ -102,6 +102,11 @@ public class SecurityConfig {
                                 "/api/auth/register",
                                 "/api/auth/registration",
                                 "/error").permitAll()
+                        .requestMatchers(
+                                "/api/auth/me",
+                                "/api/auth/logout",
+                                "/api/auth/change-password").authenticated()
+                        .requestMatchers("/api/user/**").hasRole("USER")
                         .requestMatchers(HttpMethod.POST,
                                 "/api/zones",
                                 "/api/spots",
@@ -120,6 +125,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/members/*/audits").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/bookings/*/audits").hasRole("ADMIN")
+                        .requestMatchers("/api/**").hasAnyRole("ADMIN", "OPERATOR")
                         .anyRequest().authenticated())
                 .addFilterBefore(accountStateFilter, AuthorizationFilter.class)
                 .requestCache(cache -> cache.disable())

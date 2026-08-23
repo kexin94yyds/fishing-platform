@@ -119,6 +119,12 @@ function actionLabel(action: string) {
   } as Record<string, string>)[action] || action
 }
 
+function roleLabel(role: Account['role']) {
+  if (role === 'ADMIN') return '管理员'
+  if (role === 'USER') return '钓友用户'
+  return '运营人员'
+}
+
 function clearSensitiveFields() {
   form.password = ''
 }
@@ -148,12 +154,12 @@ onMounted(load)
       </section>
 
       <section class="account-panel">
-        <header><h2>运营账号</h2><span>用户名创建后不可修改</span></header>
-        <LakeEmptyState v-if="!accounts.length" title="暂无账号" description="创建首个运营账号后可在这里管理" compact />
+        <header><h2>账号名册</h2><span>用户名创建后不可修改</span></header>
+        <LakeEmptyState v-if="!accounts.length" title="暂无账号" description="创建首个账号后可在这里管理" compact />
         <el-table v-else :data="accounts" stripe>
           <el-table-column prop="username" label="用户名" min-width="150" />
           <el-table-column prop="displayName" label="显示名称" min-width="150" />
-          <el-table-column label="角色" width="110"><template #default="scope">{{ scope.row.role === 'ADMIN' ? '管理员' : '运营人员' }}</template></el-table-column>
+          <el-table-column label="角色" width="110"><template #default="scope">{{ roleLabel(scope.row.role) }}</template></el-table-column>
           <el-table-column label="状态" width="110"><template #default="scope"><StatusTag :status="scope.row.enabled ? 'ACTIVE' : 'INACTIVE'" /></template></el-table-column>
           <el-table-column label="更新时间" min-width="170"><template #default="scope">{{ formatDateTime(scope.row.updatedAt) }}</template></el-table-column>
           <el-table-column label="操作" width="180" align="right">
@@ -177,12 +183,12 @@ onMounted(load)
       </section>
     </ResourceState>
 
-    <el-dialog v-model="dialogOpen" :title="mode === 'create' ? '创建运营账号' : '编辑运营账号'" width="520px" destroy-on-close @closed="clearSensitiveFields">
+    <el-dialog v-model="dialogOpen" :title="mode === 'create' ? '创建账号' : '编辑账号'" width="520px" destroy-on-close @closed="clearSensitiveFields">
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
         <el-form-item label="用户名" prop="username"><el-input v-model.trim="form.username" :disabled="mode === 'edit'" autocomplete="username" /></el-form-item>
         <el-form-item label="显示名称" prop="displayName"><el-input v-model.trim="form.displayName" /></el-form-item>
         <el-form-item v-if="mode === 'create'" label="初始密码" prop="password"><el-input v-model="form.password" type="password" show-password autocomplete="new-password" /></el-form-item>
-        <el-form-item label="角色" prop="role"><el-select v-model="form.role" :disabled="mode === 'edit' && String(form.id) === String(auth.user?.id)" style="width:100%"><el-option label="运营人员" value="OPERATOR" /><el-option label="管理员" value="ADMIN" /></el-select></el-form-item>
+        <el-form-item label="角色" prop="role"><el-select v-model="form.role" :disabled="mode === 'edit' && (String(form.id) === String(auth.user?.id) || form.role === 'USER')" style="width:100%"><el-option label="运营人员" value="OPERATOR" /><el-option label="管理员" value="ADMIN" /><el-option label="钓友用户" value="USER" /></el-select></el-form-item>
         <el-form-item v-if="mode === 'edit'" label="账号状态"><el-switch v-model="form.enabled" :disabled="String(form.id) === String(auth.user?.id)" active-text="启用" inactive-text="停用" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="dialogOpen = false">取消</el-button><el-button type="primary" :loading="saving" @click="save">保存</el-button></template>

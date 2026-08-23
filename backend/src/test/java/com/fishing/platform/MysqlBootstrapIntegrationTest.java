@@ -49,7 +49,7 @@ class MysqlBootstrapIntegrationTest {
         assertEquals(1, userMapper.countEnabledAdmins());
         assertNull(userMapper.findByUsername("admin"), "MySQL 不应创建固定演示管理员");
         assertEquals(1, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM app_user", Integer.class));
-        assertIterableEquals(List.of("1", "3", "5", "6", "7", "8", "9", "10", "11", "12"), appliedMigrationVersions());
+        assertIterableEquals(List.of("1", "3", "5", "6", "7", "8", "9", "10", "11", "12", "13"), appliedMigrationVersions());
         assertNoDemoBusinessData();
     }
 

@@ -74,6 +74,9 @@ public class AccountService {
                 && userMapper.countEnabledAdmins() <= 1) {
             throw new BusinessException("必须至少保留一个启用的管理员账号");
         }
+        if (crossesUserBoundary(target.role(), request.role())) {
+            throw new BusinessException("钓友用户与工作人员不能互相转换角色");
+        }
         if (!target.version().equals(request.expectedVersion())) {
             throw staleAccount();
         }
@@ -150,6 +153,10 @@ public class AccountService {
     private boolean removesEnabledAdmin(UserAccount target, String nextRole, boolean nextEnabled) {
         return target.enabled() && "ADMIN".equals(target.role())
                 && (!nextEnabled || !"ADMIN".equals(nextRole));
+    }
+
+    private boolean crossesUserBoundary(String currentRole, String nextRole) {
+        return "USER".equals(currentRole) != "USER".equals(nextRole);
     }
 
     private BusinessException staleAccount() {

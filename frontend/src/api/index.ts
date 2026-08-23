@@ -28,6 +28,7 @@ import type {
   TrafficAnalytics,
   TrafficDailyEntry,
   TrafficDailyUpsertPayload,
+  UserBookingPayload,
   Zone,
 } from '@/types'
 
@@ -139,6 +140,23 @@ export const bookingApi = {
     request<unknown>({ url: `/bookings/${id}/audits`, method: 'GET', params: { limit } }).then((data) =>
       toPage<BookingAudit>(data, ['audits']),
     ),
+}
+
+export const userBookingApi = {
+  availability: (params: { date?: string; timeSlot?: string; spotId?: Id }): Promise<PageResult<Availability>> =>
+    request<unknown>({
+      url: '/user/availability',
+      method: 'GET',
+      params: { date: params.date, timeSlot: params.timeSlot, spotId: params.spotId },
+    }).then((data) => toPage<Availability>(data, ['spots', 'availability'])),
+  list: (): Promise<PageResult<Booking>> =>
+    request<unknown>({ url: '/user/bookings', method: 'GET' }).then((data) =>
+      toPage<Booking>(data, ['bookings']),
+    ),
+  create: (data: UserBookingPayload) =>
+    request<Booking>({ url: '/user/bookings', method: 'POST', data }),
+  cancel: (id: Booking['id']) =>
+    request<Booking>({ url: `/user/bookings/${id}/cancel`, method: 'POST' }),
 }
 
 export const catchApi = {

@@ -23,7 +23,7 @@ export interface Account {
   id: Id
   username: string
   displayName: string
-  role: 'ADMIN' | 'OPERATOR'
+  role: 'ADMIN' | 'OPERATOR' | 'USER'
   enabled: boolean
   version: number
   createdAt?: string
@@ -344,6 +344,15 @@ export interface Availability {
   price?: number
   status: string
   version?: number
+}
+
+export interface UserBookingPayload {
+  contactPhone: string
+  spotId: Id
+  fishingDate: string
+  timeSlot: 'MORNING' | 'AFTERNOON' | 'EVENING'
+  guests: number
+  notes?: string
 }
 
 export interface SlotInventory {

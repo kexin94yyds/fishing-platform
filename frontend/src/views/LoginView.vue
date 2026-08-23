@@ -35,7 +35,7 @@ async function submit() {
   try {
     await auth.login(form)
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
-    await router.replace(redirect)
+    await router.replace(auth.isUser ? { name: 'my-fishing' } : redirect)
   } catch (reason) {
     error.value = errorMessage(reason)
   }
@@ -56,7 +56,7 @@ onMounted(auth.hydrateRegistration)
       <div class="login-brand__mark">湖</div>
       <div>
         <strong translate="no">湖畔运营所</strong>
-        <span>淡水垂钓基地 · 现场工作台</span>
+        <span>淡水垂钓基地 · 湖畔入口</span>
       </div>
     </header>
 
@@ -69,9 +69,9 @@ onMounted(auth.hydrateRegistration)
 
       <div class="login-form-wrap">
         <div class="login-form-head">
-          <span>当班登录</span>
-          <h1 id="login-title">回到湖边，继续今天的值守</h1>
-          <p>使用基地运营账号进入现场工作台</p>
+          <span>湖畔登录</span>
+          <h1 id="login-title">回到湖边，开始今天的安排</h1>
+          <p>钓友进入预约页，工作人员进入现场工作台</p>
         </div>
         <el-alert
           v-if="error"
@@ -97,7 +97,7 @@ onMounted(auth.hydrateRegistration)
               name="username"
               autocomplete="username"
               autocapitalize="none"
-              placeholder="请输入运营账号…"
+              placeholder="请输入登录账号…"
               size="large"
             />
           </el-form-item>
@@ -132,15 +132,15 @@ onMounted(auth.hydrateRegistration)
       </div>
 
       <div class="login-desk__scope" aria-label="工作台范围">
-        <span>钓位与预订</span>
-        <span>会员与收费</span>
-        <span>经营与分析</span>
+        <span>钓友预约</span>
+        <span>现场运营</span>
+        <span>经营分析</span>
       </div>
     </section>
 
     <footer class="login-foot">
       <span>湖区数据由基地服务实时提供</span>
-      <span>仅限现场运营人员使用</span>
+      <span>钓友与基地工作人员统一入口</span>
     </footer>
   </main>
 </template>

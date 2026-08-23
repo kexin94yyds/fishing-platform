@@ -59,13 +59,15 @@ public final class ApiDtos {
             @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d)\\S{8,64}$",
                     message = "须至少包含一个英文字母和一个数字，且不能包含空格")
             String password,
-            @NotBlank @Pattern(regexp = "ADMIN|OPERATOR", message = "必须是 ADMIN 或 OPERATOR") String role
+            @NotBlank @Pattern(regexp = "ADMIN|OPERATOR|USER",
+                    message = "必须是 ADMIN、OPERATOR 或 USER") String role
     ) {
     }
 
     public record AccountUpdateRequest(
             @NotBlank @Size(min = 2, max = 100) String displayName,
-            @NotBlank @Pattern(regexp = "ADMIN|OPERATOR", message = "必须是 ADMIN 或 OPERATOR") String role,
+            @NotBlank @Pattern(regexp = "ADMIN|OPERATOR|USER",
+                    message = "必须是 ADMIN、OPERATOR 或 USER") String role,
             @NotNull Boolean enabled,
             @NotNull @Min(0) Long expectedVersion
     ) {
@@ -159,6 +161,19 @@ public final class ApiDtos {
                     || (contactName != null && !contactName.isBlank()
                     && contactPhone != null && !contactPhone.isBlank());
         }
+    }
+
+    public record UserBookingRequest(
+            @NotBlank
+            @Pattern(regexp = "[0-9+\\- ]{6,32}", message = "联系电话格式不正确")
+            String contactPhone,
+            @NotNull Long spotId,
+            @NotNull LocalDate fishingDate,
+            @NotBlank @Pattern(regexp = "MORNING|AFTERNOON|EVENING",
+                    message = "必须是 MORNING、AFTERNOON 或 EVENING") String timeSlot,
+            @NotNull @Min(1) Integer guests,
+            @Size(max = 500) String notes
+    ) {
     }
 
     public record CatchCreateRequest(
