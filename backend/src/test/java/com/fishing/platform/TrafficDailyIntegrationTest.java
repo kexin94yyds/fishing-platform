@@ -254,17 +254,23 @@ class TrafficDailyIntegrationTest {
     }
 
     private MockHttpSession registerOperator() throws Exception {
+        String username = "traffic_operator_" + sequence.incrementAndGet();
+        String password = "Operator123";
+        jdbcTemplate.update("""
+                INSERT INTO app_user (username, password_hash, display_name, role, enabled)
+                VALUES (?, ?, '客流运营员', 'OPERATOR', TRUE)
+                """, username, passwordEncoder.encode(password));
         MockHttpSession session = new MockHttpSession();
         CsrfCredentials csrf = csrf(session);
-        mockMvc.perform(post("/api/auth/register")
+        mockMvc.perform(post("/api/auth/login")
                         .session(session).cookie(csrf.cookie())
                         .header(csrf.headerName(), csrf.token())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
-                                "username", "traffic_operator_" + sequence.incrementAndGet(),
-                                "displayName", "客流运营员",
-                                "password", "Operator123"))))
-                .andExpect(status().isCreated());
+                                "username", username,
+                                "password", password))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.role", is("OPERATOR")));
         return session;
     }
 

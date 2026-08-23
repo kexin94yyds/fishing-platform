@@ -26,7 +26,7 @@ const validateConfirm = (_rule: unknown, value: string, callback: (error?: Error
 }
 
 const validateAccepted = (_rule: unknown, value: boolean, callback: (error?: Error) => void) => {
-  if (!value) callback(new Error('请先同意运营账号使用规范'))
+  if (!value) callback(new Error('请先同意钓友账号使用规范'))
   else callback()
 }
 
@@ -71,7 +71,7 @@ async function submit() {
       displayName: form.displayName,
       password: form.password,
     })
-    await router.replace('/')
+    await router.replace({ name: 'my-fishing' })
   } catch (reason) {
     error.value = errorMessage(reason)
   }
@@ -83,14 +83,14 @@ async function submit() {
     <div class="register-shoreline" aria-hidden="true">
       <span class="register-shoreline__ring register-shoreline__ring--outer" />
       <span class="register-shoreline__ring register-shoreline__ring--inner" />
-      <span class="register-shoreline__legend">NEW OPERATOR · REGISTRATION LEDGER</span>
+      <span class="register-shoreline__legend">NEW ANGLER · REGISTRATION LEDGER</span>
     </div>
 
     <header class="register-brand">
       <div class="register-brand__mark">湖</div>
       <div>
         <strong translate="no">湖畔运营所</strong>
-        <span>淡水垂钓基地 · 运营账号登记</span>
+        <span>淡水垂钓基地 · 钓友账号登记</span>
       </div>
     </header>
 
@@ -98,14 +98,14 @@ async function submit() {
       <div class="register-ledger__binding" aria-hidden="true" />
       <div class="register-ledger__folio">
         <span>新成员登记簿</span>
-        <span translate="no">OPERATOR ACCOUNT</span>
+        <span translate="no">ANGLER ACCOUNT</span>
       </div>
 
       <div class="register-form-wrap">
         <header class="register-form-head">
-          <span>新成员登记</span>
-          <h1 id="register-title">登记一名新的现场运营人员</h1>
-          <p>完成后将直接进入工作台，账号权限固定为运营人员</p>
+          <span>新钓友登记</span>
+          <h1 id="register-title">创建你的湖畔钓友账号</h1>
+          <p>完成后将直接进入“我的垂钓”，账号权限固定为钓友用户</p>
         </header>
 
         <el-alert
@@ -134,7 +134,7 @@ async function submit() {
                 name="username"
                 autocomplete="username"
                 autocapitalize="none"
-                placeholder="例如 operator_01…"
+                placeholder="例如 angler_01…"
               />
             </el-form-item>
             <el-form-item label="显示名称" prop="displayName">
@@ -144,7 +144,7 @@ async function submit() {
                 name="displayName"
                 autocomplete="name"
                 maxlength="100"
-                placeholder="例如 王师傅…"
+                placeholder="例如 小王…"
               />
             </el-form-item>
             <el-form-item label="登录密码" prop="password">
@@ -173,7 +173,7 @@ async function submit() {
           </div>
           <el-form-item prop="accepted" class="register-agreement">
             <el-checkbox v-model="form.accepted">
-              我已阅读并同意运营账号使用规范
+              我已阅读并同意钓友账号使用规范
             </el-checkbox>
           </el-form-item>
           <div class="register-actions">
@@ -192,21 +192,21 @@ async function submit() {
 
       <aside class="register-notes" aria-label="账号使用说明">
         <div class="register-notes__intro">
-          <span>值守规范</span>
-          <strong>一人一号，操作留痕</strong>
+          <span>预约须知</span>
+          <strong>一人一号，只看本人预约</strong>
         </div>
         <dl>
           <div>
             <dt>账号用途</dt>
-            <dd>基地内部运营，不用于会员登录</dd>
+            <dd>查看钓位余量，提交和管理本人预约</dd>
           </div>
           <div>
-            <dt>数据责任</dt>
-            <dd>使用真实姓名，确认现场信息后提交</dd>
+            <dt>信息使用</dt>
+            <dd>使用常用名称，预约时填写可联系手机号</dd>
           </div>
           <div>
             <dt>会话安全</dt>
-            <dd>离开值守设备前请主动退出</dd>
+            <dd>不要与他人共享账号，离开设备前主动退出</dd>
           </div>
         </dl>
       </aside>

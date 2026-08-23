@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -153,20 +154,21 @@ class AuthorizationIntegrationTest {
     }
 
     private MockHttpSession registerOperator() throws Exception {
+        String username = "rbac_operator";
+        String password = "Operator123";
+        jdbcTemplate.update("""
+                INSERT INTO app_user (username, password_hash, display_name, role, enabled)
+                VALUES (?, ?, '权限测试运营员', 'OPERATOR', TRUE)
+                """, username, passwordEncoder.encode(password));
         MockHttpSession session = new MockHttpSession();
         CsrfCredentials csrf = csrf(session);
-        mockMvc.perform(post("/api/auth/register")
+        mockMvc.perform(post("/api/auth/login")
                         .session(session).cookie(csrf.cookie())
                         .header(csrf.headerName(), csrf.token())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "username": "rbac_operator",
-                                  "displayName": "权限测试运营员",
-                                  "password": "Operator123"
-                                }
-                                """))
-                .andExpect(status().isCreated())
+                        .content(objectMapper.writeValueAsString(
+                                Map.of("username", username, "password", password))))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.role", is("OPERATOR")));
         return session;
     }

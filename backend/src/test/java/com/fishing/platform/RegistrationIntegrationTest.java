@@ -71,9 +71,9 @@ class RegistrationIntegrationTest {
     }
 
     @Test
-    void successfulRegisterCreatesBcryptOperatorAndLogsInAutomatically() throws Exception {
-        String username = "operator_demo";
-        String rawPassword = "Operator123";
+    void successfulRegisterCreatesBcryptUserIgnoresInjectedRoleAndLogsInAutomatically() throws Exception {
+        String username = "angler_demo";
+        String rawPassword = "Angler123";
         MockHttpSession session = new MockHttpSession();
         String anonymousSessionId = session.getId();
         CsrfCredentials beforeCsrf = csrf(session);
@@ -83,12 +83,12 @@ class RegistrationIntegrationTest {
                         .cookie(beforeCsrf.cookie())
                         .header(beforeCsrf.headerName(), beforeCsrf.token())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerJson(username, "新运营员", rawPassword, "ADMIN")))
+                        .content(registerJson(username, "新钓友", rawPassword, "ADMIN")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.username", is(username)))
-                .andExpect(jsonPath("$.data.displayName", is("新运营员")))
-                .andExpect(jsonPath("$.data.role", is("OPERATOR")))
+                .andExpect(jsonPath("$.data.displayName", is("新钓友")))
+                .andExpect(jsonPath("$.data.role", is("USER")))
                 .andReturn();
 
         assertNotEquals(anonymousSessionId, session.getId(),
@@ -100,18 +100,15 @@ class RegistrationIntegrationTest {
         mockMvc.perform(get("/api/auth/me").session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.username", is(username)))
-                .andExpect(jsonPath("$.data.role", is("OPERATOR")));
+                .andExpect(jsonPath("$.data.role", is("USER")));
 
         CsrfCredentials afterCsrf = csrf(session);
         assertNotEquals(beforeCsrf.token(), afterCsrf.token(),
                 "注册自动登录后重新获取的 CSRF token 应完成轮换");
-        mockMvc.perform(post("/api/bookings")
-                        .session(session)
-                        .cookie(afterCsrf.cookie())
-                        .header(afterCsrf.headerName(), afterCsrf.token())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
-                .andExpect(status().isBadRequest())
+        mockMvc.perform(get("/api/user/bookings").session(session))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/bookings").session(session))
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success", is(false)));
 
         Map<String, Object> stored = jdbcTemplate.queryForMap(
@@ -120,14 +117,14 @@ class RegistrationIntegrationTest {
         assertNotEquals(rawPassword, passwordHash);
         assertTrue(passwordHash.startsWith("$2"));
         assertTrue(passwordEncoder.matches(rawPassword, passwordHash));
-        assertEquals("OPERATOR", stored.get("role"));
+        assertEquals("USER", stored.get("role"));
         assertEquals(Boolean.TRUE, stored.get("enabled"));
     }
 
     @Test
     void duplicateUsernameReturnsConflict() throws Exception {
         String username = "duplicate_user";
-        registerSuccessfully(new MockHttpSession(), username, "首个运营员", "Duplicate123");
+        registerSuccessfully(new MockHttpSession(), username, "首位钓友", "Duplicate123");
 
         MockHttpSession secondSession = new MockHttpSession();
         CsrfCredentials csrf = csrf(secondSession);
@@ -136,7 +133,7 @@ class RegistrationIntegrationTest {
                         .cookie(csrf.cookie())
                         .header(csrf.headerName(), csrf.token())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerJson(username, "重复运营员", "Duplicate123", null)))
+                        .content(registerJson(username, "重复钓友", "Duplicate123", null)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.message", is("用户名已存在")))
@@ -147,7 +144,7 @@ class RegistrationIntegrationTest {
 
     @Test
     void weakPasswordIsRejectedWithoutCreatingAccount() throws Exception {
-        String username = "weak_operator";
+        String username = "weak_angler";
         MockHttpSession session = new MockHttpSession();
         CsrfCredentials csrf = csrf(session);
 
@@ -167,12 +164,12 @@ class RegistrationIntegrationTest {
 
     @Test
     void concurrentRegistrationCreatesExactlyOneAccount() throws Exception {
-        String username = "race_operator";
+        String username = "race_angler";
         MockHttpSession firstSession = new MockHttpSession();
         MockHttpSession secondSession = new MockHttpSession();
         CsrfCredentials firstCsrf = csrf(firstSession);
         CsrfCredentials secondCsrf = csrf(secondSession);
-        String body = registerJson(username, "并发运营员", "Racepass123", "ADMIN");
+        String body = registerJson(username, "并发钓友", "Racepass123", "OPERATOR");
 
         CountDownLatch start = new CountDownLatch(1);
         var executor = Executors.newFixedThreadPool(2);
@@ -208,7 +205,7 @@ class RegistrationIntegrationTest {
         }
 
         assertEquals(1, userCount(username));
-        assertEquals("OPERATOR", jdbcTemplate.queryForObject(
+        assertEquals("USER", jdbcTemplate.queryForObject(
                 "SELECT role FROM app_user WHERE username = ?", String.class, username));
     }
 

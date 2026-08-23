@@ -113,7 +113,7 @@ function actionLabel(action: string) {
     UPDATE: '更新账号',
     RESET_PASSWORD: '重置密码',
     CHANGE_PASSWORD: '本人改密',
-    PUBLIC_REGISTER: '公开注册',
+    PUBLIC_REGISTER: '钓友公开注册',
     BOOTSTRAP_CREATE: '初始化管理员',
     BOOTSTRAP_RESTORE: '恢复管理员',
   } as Record<string, string>)[action] || action

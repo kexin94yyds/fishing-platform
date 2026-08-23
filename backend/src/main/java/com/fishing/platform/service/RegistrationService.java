@@ -42,7 +42,7 @@ public class RegistrationService {
         }
 
         try {
-            userMapper.insertOperator(username, passwordEncoder.encode(request.password()),
+            userMapper.insertUser(username, passwordEncoder.encode(request.password()),
                     request.displayName().trim());
         } catch (DataIntegrityViolationException exception) {
             throw new BusinessException("用户名已存在");

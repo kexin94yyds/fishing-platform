@@ -126,8 +126,8 @@ onMounted(auth.hydrateRegistration)
         </el-form>
         <p class="login-help">如账号无法使用，请联系系统管理员处理</p>
         <p v-if="auth.registrationEnabled" class="login-register">
-          还没有运营账号？
-          <RouterLink to="/register">创建账号</RouterLink>
+          还没有钓友账号？
+          <RouterLink to="/register">立即注册</RouterLink>
         </p>
       </div>
 

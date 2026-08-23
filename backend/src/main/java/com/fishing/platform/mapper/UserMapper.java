@@ -38,11 +38,11 @@ public interface UserMapper {
             INSERT INTO app_user
                 (username, password_hash, display_name, role, enabled)
             VALUES
-                (#{username}, #{passwordHash}, #{displayName}, 'OPERATOR', TRUE)
+                (#{username}, #{passwordHash}, #{displayName}, 'USER', TRUE)
             """)
-    int insertOperator(@Param("username") String username,
-                       @Param("passwordHash") String passwordHash,
-                       @Param("displayName") String displayName);
+    int insertUser(@Param("username") String username,
+                   @Param("passwordHash") String passwordHash,
+                   @Param("displayName") String displayName);
 
     @Insert("""
             INSERT INTO app_user
